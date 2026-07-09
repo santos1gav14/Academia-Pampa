@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Academia do Pampa — Agendamento</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+:root{
+  --bg:#0F1519;
+  --panel:#19222A;
+  --panel-hi:#212C35;
+  --border:#2B3944;
+  --text:#E9EDEF;
+  --text-dim:#8CA0AA;
+  --accent:#E8A33D;
+  --accent-dim:#6B5227;
+  --good:#5B9279;
+  --good-bg:#1B2A24;
+  --danger:#C1503F;
+  --danger-bg:#2B1C1A;
+  --radius:16px;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'IBM Plex Sans',sans-serif;
+  min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+  display:flex;
+  justify-content:center;
+}
+#app{
+  width:100%;
+  max-width:430px;
+  min-height:100vh;
+  background:var(--bg);
+  position:relative;
+  padding-bottom:32px;
+}
+
+/* ---------- TOP BAR ---------- */
+.topbar{
+  padding:22px 20px 16px;
+  border-bottom:1px solid var(--border);
+  background:linear-gradient(180deg, #141D24 0%, var(--bg) 100%);
+}
+.brand{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+.brand-badge{
+  width:42px;height:42px;
+  border-radius:10px;
+  background:radial-gradient(circle at 30% 25%, #2C3944, #121A20);
+  border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  font-family:'IBM Plex Mono',monospace;
+  font-weight:700;
+  font-size:15px;
+  color:var(--accent);
+  letter-spacing:-0.5px;
+  flex-shrink:0;
+}
+.brand-text h1{
+  margin:0;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:19px;
+  font-weight:600;
+  letter-spacing:0.5px;
+  color:var(--text);
+}
+.brand-text p{
+  margin:2px 0 0;
+  font-size:12px;
+  color:var(--text-dim);
+  letter-spacing:0.3px;
+}
+.topbar-meta{
+  margin-top:14px;
+  display:flex;
+  gap:8px;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:11px;
+  color:var(--text-dim);
+}
+.pill-meta{
+  border:1px solid var(--border);
+  border-radius:20px;
+  padding:4px 10px;
+  background:var(--panel);
+}
+.pill-live{
+  border:1px solid rgba(91,146,121,0.4);
+  border-radius:20px;
+  padding:4px 10px;
+  background:var(--good-bg);
+  color:var(--good);
+  display:flex;
+  align-items:center;
+  gap:5px;
+}
+.dot-live{
+  width:6px;height:6px;
+  border-radius:50%;
+  background:var(--good);
+  animation:pulse 1.6s infinite;
+}
+@keyframes pulse{0%{opacity:1;}50%{opacity:0.35;}100%{opacity:1;}}
+
+/* ---------- DAY STRIP ---------- */
+.day-strip{
+  display:flex;
+  gap:8px;
+  padding:16px 20px;
+  overflow-x:auto;
+  scrollbar-width:none;
+  border-bottom:1px solid var(--border);
+}
+.day-strip::-webkit-scrollbar{display:none;}
+.day-chip{
+  flex-shrink:0;
+  min-width:56px;
+  padding:10px 6px 8px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:var(--panel);
+  text-align:center;
+  cursor:pointer;
+  transition:all .15s ease;
+}
+.day-chip .dow{
+  font-size:10px;
+  color:var(--text-dim);
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  font-family:'IBM Plex Mono',monospace;
+}
+.day-chip .dnum{
+  font-size:17px;
+  font-weight:600;
+  margin-top:2px;
+  font-family:'IBM Plex Mono',monospace;
+}
+.day-chip.active{
+  background:var(--accent);
+  border-color:var(--accent);
+}
+.day-chip.active .dow, .day-chip.active .dnum{color:#1A1204;}
+.day-chip.today .dnum{color:var(--accent);}
+.day-chip.active.today .dnum{color:#1A1204;}
+
+/* ---------- TURNO LIST ---------- */
+.list-label{
+  padding:18px 20px 6px;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:11px;
+  letter-spacing:1px;
+  color:var(--text-dim);
+  text-transform:uppercase;
+}
+.turno-list{
+  padding:6px 16px 8px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.turno-card{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:14px 16px;
+  display:flex;
+  align-items:center;
+  gap:14px;
+  cursor:pointer;
+  transition:border-color .15s ease, transform .1s ease;
+}
+.turno-card:active{transform:scale(0.98);}
+.turno-card.full{border-color:rgba(193,80,63,0.35);}
+.turno-time{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:15px;
+  font-weight:600;
+  min-width:98px;
+}
+.turno-time small{
+  display:block;
+  font-size:10px;
+  font-weight:400;
+  color:var(--text-dim);
+  margin-top:1px;
+}
+.gauge{
+  flex:1;
+  display:flex;
+  gap:3px;
+  align-items:center;
+}
+.tick{
+  height:16px;
+  flex:1;
+  border-radius:2px;
+  background:#2A353E;
+}
+.tick.on{background:var(--accent);}
+.tick.on.full{background:var(--danger);}
+.turno-status{
+  min-width:64px;
+  text-align:right;
+}
+.count{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:14px;
+  font-weight:600;
+}
+.count.full{color:var(--danger);}
+.status-label{
+  font-size:9px;
+  letter-spacing:0.5px;
+  text-transform:uppercase;
+  color:var(--text-dim);
+  margin-top:1px;
+}
+.status-label.full{color:var(--danger);}
+.status-label.ok{color:var(--good);}
+
+/* ---------- MODAL ---------- */
+.overlay{
+  position:fixed;inset:0;
+  background:rgba(6,9,11,0.6);
+  display:none;
+  align-items:flex-end;
+  justify-content:center;
+  z-index:50;
+}
+.overlay.open{display:flex;}
+.sheet{
+  width:100%;
+  max-width:430px;
+  background:var(--panel-hi);
+  border-radius:22px 22px 0 0;
+  border-top:1px solid var(--border);
+  padding:10px 20px 26px;
+  max-height:86vh;
+  overflow-y:auto;
+  animation:slideup .18s ease;
+}
+@keyframes slideup{from{transform:translateY(30px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+.sheet-handle{
+  width:36px;height:4px;
+  background:var(--border);
+  border-radius:4px;
+  margin:0 auto 16px;
+}
+.sheet-title{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:18px;
+  font-weight:600;
+}
+.sheet-sub{
+  font-size:12px;
+  color:var(--text-dim);
+  margin-top:2px;
+  margin-bottom:16px;
+}
+.roster{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  margin-bottom:18px;
+}
+.roster-empty{
+  font-size:13px;
+  color:var(--text-dim);
+  padding:14px 0;
+  text-align:center;
+  border:1px dashed var(--border);
+  border-radius:12px;
+}
+.roster-item{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:9px 12px;
+  gap:10px;
+}
+.roster-item .who{
+  font-size:13.5px;
+}
+.roster-item .who b{
+  font-family:'IBM Plex Mono',monospace;
+  color:var(--accent);
+  margin-right:6px;
+}
+.roster-item .rm{
+  background:var(--danger);
+  border:1px solid var(--danger);
+  color:#FFFFFF;
+  font-size:11.5px;
+  font-weight:700;
+  letter-spacing:0.3px;
+  cursor:pointer;
+  padding:7px 14px;
+  border-radius:8px;
+  flex-shrink:0;
+  transition:all .12s ease;
+}
+.roster-item .rm:hover, .roster-item .rm:active{
+  background:#A5402F;
+  border-color:#A5402F;
+  transform:scale(0.97);
+}
+
+.form-row{margin-bottom:12px;}
+.form-row label{
+  display:block;
+  font-size:11px;
+  color:var(--text-dim);
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  margin-bottom:6px;
+  font-family:'IBM Plex Mono',monospace;
+}
+select, input[type=text]{
+  width:100%;
+  background:var(--panel);
+  border:1px solid var(--border);
+  color:var(--text);
+  padding:11px 12px;
+  border-radius:10px;
+  font-size:14px;
+  font-family:'IBM Plex Sans',sans-serif;
+  appearance:none;
+  -webkit-appearance:none;
+}
+select:focus, input:focus{outline:2px solid var(--accent);outline-offset:1px;}
+.btn{
+  width:100%;
+  padding:13px;
+  border-radius:12px;
+  border:none;
+  font-size:14.5px;
+  font-weight:600;
+  font-family:'IBM Plex Sans',sans-serif;
+  cursor:pointer;
+  margin-top:4px;
+}
+.btn-primary{background:var(--accent);color:#1A1204;}
+.btn-primary:disabled{background:#3A3A32;color:#6E6E64;cursor:not-allowed;}
+.btn-ghost{background:transparent;color:var(--text-dim);border:1px solid var(--border);margin-top:8px;}
+.full-banner{
+  background:var(--danger-bg);
+  border:1px solid rgba(193,80,63,0.4);
+  color:#E6A99E;
+  font-size:12.5px;
+  padding:10px 12px;
+  border-radius:10px;
+  margin-bottom:14px;
+}
+.pin-hint{
+  font-size:11px;
+  color:var(--text-dim);
+  margin-top:-6px;
+  margin-bottom:12px;
+}
+.pin-overlay{
+  position:fixed;inset:0;
+  background:rgba(6,9,11,0.7);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:80;
+  padding:20px;
+}
+.pin-overlay.open{display:flex;}
+.pin-box{
+  width:100%;
+  max-width:320px;
+  background:var(--panel-hi);
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:20px;
+}
+.pin-box h3{
+  margin:0 0 4px;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:15px;
+}
+.pin-box p{
+  margin:0 0 14px;
+  font-size:12.5px;
+  color:var(--text-dim);
+}
+.pin-box input{
+  text-align:center;
+  letter-spacing:8px;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:20px;
+}
+.pin-error{
+  font-size:12px;
+  color:var(--danger);
+  margin-top:8px;
+  min-height:14px;
+}
+.pin-actions{
+  display:flex;
+  gap:8px;
+  margin-top:4px;
+}
+.pin-actions .btn{margin-top:0;}
+.toast{
+  position:fixed;
+  bottom:24px;left:50%;
+  transform:translateX(-50%);
+  background:var(--panel-hi);
+  border:1px solid var(--border);
+  color:var(--text);
+  padding:10px 18px;
+  border-radius:30px;
+  font-size:13px;
+  z-index:100;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .2s ease, transform .2s ease;
+  text-align:center;
+  max-width:85%;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(-6px);}
+
+.config-warning{
+  margin:16px 20px;
+  padding:14px;
+  background:var(--danger-bg);
+  border:1px solid rgba(193,80,63,0.4);
+  border-radius:12px;
+  font-size:12.5px;
+  color:#E6A99E;
+  line-height:1.5;
+}
+.config-warning code{
+  background:rgba(0,0,0,0.25);
+  padding:1px 5px;
+  border-radius:4px;
+  font-family:'IBM Plex Mono',monospace;
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-badge">P</div>
+      <div class="brand-text">
+        <h1>ACADEMIA DO PAMPA</h1>
+        <p>1º/14º GAV · agendamento de turnos</p>
+      </div>
+    </div>
+    <div class="topbar-meta">
+      <span class="pill-meta">CAP. 15 / TURNO</span>
+      <span class="pill-meta">1H POR TURNO</span>
+      <span class="pill-live"><span class="dot-live"></span>AO VIVO</span>
+    </div>
+  </div>
+
+  <div id="configWarning"></div>
+
+  <div class="day-strip" id="dayStrip"></div>
+
+  <div class="list-label" id="listLabel">Turnos disponíveis</div>
+  <div class="turno-list" id="turnoList"></div>
+
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title" id="sheetTitle">--</div>
+    <div class="sheet-sub" id="sheetSub">--</div>
+
+    <div id="fullBanner"></div>
+
+    <div class="roster" id="roster"></div>
+
+    <div id="reserveForm">
+      <div class="form-row">
+        <label>Posto/Graduação</label>
+        <select id="inpPosto">
+          <option value="Cel">Cel</option>
+          <option value="Ten Cel">Ten Cel</option>
+          <option value="Maj">Maj</option>
+          <option value="Cap" selected>Cap</option>
+          <option value="1º Ten">1º Ten</option>
+          <option value="2º Ten">2º Ten</option>
+          <option value="Asp">Asp</option>
+          <option value="S Ten">S Ten</option>
+          <option value="1º Sgt">1º Sgt</option>
+          <option value="2º Sgt">2º Sgt</option>
+          <option value="3º Sgt">3º Sgt</option>
+          <option value="Cb">Cb</option>
+          <option value="S1">S1</option>
+          <option value="S2">S2</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Nome</label>
+        <input type="text" id="inpNome" placeholder="Ex.: Santos" maxlength="30">
+      </div>
+      <div class="form-row">
+        <label>Senha de 4 dígitos</label>
+        <input type="text" id="inpPin" placeholder="0000" inputmode="numeric" maxlength="4">
+        <div class="pin-hint">Guarde esse número — você vai precisar dele para cancelar depois.</div>
+      </div>
+      <button class="btn btn-primary" id="btnReservar">Reservar vaga</button>
+    </div>
+    <button class="btn btn-ghost" id="btnFechar">Fechar</button>
+  </div>
+</div>
+
+<div class="pin-overlay" id="pinOverlay">
+  <div class="pin-box">
+    <h3>Cancelar reserva</h3>
+    <p id="pinBoxSub">Digite a senha de 4 dígitos usada nessa reserva.</p>
+    <input type="text" id="inpPinCheck" placeholder="••••" inputmode="numeric" maxlength="4">
+    <div class="pin-error" id="pinError"></div>
+    <div class="pin-actions">
+      <button class="btn btn-ghost" id="btnPinVoltar">Voltar</button>
+      <button class="btn btn-primary" id="btnPinConfirmar">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  getFirestore, doc, collection, query, where,
+  onSnapshot, runTransaction
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+/* =======================================================================
+   1) COLE AQUI a configuração do seu projeto Firebase.
+      Vem do painel: Configurações do projeto > Seus apps > SDK setup.
+      Sem isso preenchido, o app mostra um aviso e não funciona.
+   ======================================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyA_Ll4fZx1WV5J-SRvqWjGAnNQjgatl53Y",
+  authDomain: "academia-pampa-5bb6d.firebaseapp.com",
+  projectId: "academia-pampa-5bb6d",
+  storageBucket: "academia-pampa-5bb6d.firebasestorage.app",
+  messagingSenderId: "1086071589890",
+  appId: "1:1086071589890:web:0f679985c7ad18cf0bab1b"
+};
+
+const CAPACIDADE = 15;
+const TURNOS = [
+  "05h00-06h00","06h00-07h00","07h00-08h00","08h00-09h00",
+  "11h00-12h00","12h00-13h00",
+  "16h00-17h00","17h00-18h00","18h00-19h00","19h00-20h00","20h00-21h00"
+];
+const DOWS = ["DOM","SEG","TER","QUA","QUI","SEX","SÁB"];
+const COLLECTION = "reservas_academia";
+
+let db = null;
+let firebaseOk = firebaseConfig.apiKey !== "COLE_AQUI_SUA_API_KEY";
+
+if(firebaseOk){
+  try{
+    const app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+  }catch(e){
+    firebaseOk = false;
+    console.error(e);
+  }
+}else{
+  document.getElementById("configWarning").innerHTML = `
+    <div class="config-warning">
+      <b>Configuração do Firebase pendente.</b><br>
+      Abra o arquivo HTML, encontre o bloco <code>firebaseConfig</code> perto do topo do script,
+      e cole as chaves do seu projeto Firebase no lugar de "COLE_AQUI". Depois disso o agendamento
+      passa a funcionar em tempo real para todo o efetivo.
+    </div>`;
+}
+
+let selectedDateKey = null;
+let selectedTurno = null;
+let rosterMap = {};       // { turno: [ {posto,nome,pin,ts}, ... ] }
+let unsubscribe = null;
+let pendingCancelIdx = null;
+
+function dateKey(d){
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+function fmtDatePt(d){
+  return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear();
+}
+function isToday(d){
+  const t = new Date();
+  return d.toDateString() === t.toDateString();
+}
+function docId(dateK, turno){
+  return dateK + "_" + turno;
+}
+
+function buildDayStrip(){
+  const strip = document.getElementById("dayStrip");
+  strip.innerHTML = "";
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  for(let i=0;i<14;i++){
+    const d = new Date(today);
+    d.setDate(d.getDate()+i);
+    const k = dateKey(d);
+    const chip = document.createElement("div");
+    chip.className = "day-chip" + (k===selectedDateKey ? " active":"") + (isToday(d) ? " today":"");
+    chip.innerHTML = `<div class="dow">${DOWS[d.getDay()]}</div><div class="dnum">${String(d.getDate()).padStart(2,"0")}</div>`;
+    chip.onclick = () => { selecionarDia(k); };
+    strip.appendChild(chip);
+  }
+}
+
+function renderTurnoList(){
+  const list = document.getElementById("turnoList");
+  const label = document.getElementById("listLabel");
+  const d = new Date(selectedDateKey+"T00:00:00");
+  label.textContent = "Turnos — " + fmtDatePt(d) + (isToday(d) ? " (hoje)" : "");
+  list.innerHTML = "";
+
+  TURNOS.forEach(turno => {
+    const roster = rosterMap[turno] || [];
+    const count = roster.length;
+    const full = count >= CAPACIDADE;
+
+    const card = document.createElement("div");
+    card.className = "turno-card" + (full ? " full":"");
+    card.onclick = () => openSheet(turno);
+
+    const [ini,fim] = turno.split("-");
+    let ticks = "";
+    for(let i=0;i<CAPACIDADE;i++){
+      const on = i < count;
+      ticks += `<div class="tick ${on?"on":""} ${on&&full?"full":""}"></div>`;
+    }
+
+    card.innerHTML = `
+      <div class="turno-time">${ini}<small>${fim}</small></div>
+      <div class="gauge">${ticks}</div>
+      <div class="turno-status">
+        <div class="count ${full?"full":""}">${count}/${CAPACIDADE}</div>
+        <div class="status-label ${full?"full":"ok"}">${full?"ESGOTADO":"DISPONÍVEL"}</div>
+      </div>
+    `;
+    list.appendChild(card);
+  });
+
+  if(document.getElementById("overlay").classList.contains("open") && selectedTurno){
+    refreshSheetRoster();
+  }
+}
+
+function selecionarDia(k){
+  selectedDateKey = k;
+  rosterMap = {};
+  buildDayStrip();
+  renderTurnoList();
+  assinarDia();
+}
+
+function assinarDia(){
+  if(!firebaseOk) return;
+  if(unsubscribe) unsubscribe();
+
+  const q = query(collection(db, COLLECTION), where("date", "==", selectedDateKey));
+  unsubscribe = onSnapshot(q, (snap) => {
+    const novo = {};
+    snap.forEach(docSnap => {
+      const data = docSnap.data();
+      novo[data.turno] = data.lista || [];
+    });
+    rosterMap = novo;
+    renderTurnoList();
+  }, (err) => {
+    console.error(err);
+    showToast("Erro ao conectar com o banco de dados.");
+  });
+}
+
+function openSheet(turno){
+  selectedTurno = turno;
+  document.getElementById("overlay").classList.add("open");
+  refreshSheetRoster();
+}
+
+function refreshSheetRoster(){
+  const roster = rosterMap[selectedTurno] || [];
+  const full = roster.length >= CAPACIDADE;
+  const d = new Date(selectedDateKey+"T00:00:00");
+
+  document.getElementById("sheetTitle").textContent = selectedTurno;
+  document.getElementById("sheetSub").textContent = fmtDatePt(d) + " · " + roster.length + " de " + CAPACIDADE + " vagas ocupadas";
+
+  const rosterEl = document.getElementById("roster");
+  if(roster.length===0){
+    rosterEl.innerHTML = `<div class="roster-empty">Nenhuma reserva ainda neste turno.</div>`;
+  }else{
+    rosterEl.innerHTML = roster.map((r,idx) => `
+      <div class="roster-item">
+        <div class="who"><b>${r.posto}</b>${r.nome}</div>
+        <button class="rm" data-idx="${idx}" title="Cancelar reserva">Cancelar</button>
+      </div>
+    `).join("");
+    rosterEl.querySelectorAll(".rm").forEach(btn=>{
+      btn.onclick = () => abrirPinCancelamento(parseInt(btn.dataset.idx));
+    });
+  }
+
+  const banner = document.getElementById("fullBanner");
+  const form = document.getElementById("reserveForm");
+  if(full){
+    banner.innerHTML = `<div class="full-banner">Turno esgotado. Escolha outro horário ou aguarde uma vaga liberar.</div>`;
+    form.style.display = "none";
+  }else{
+    banner.innerHTML = "";
+    form.style.display = "block";
+  }
+}
+
+async function reservar(){
+  if(!firebaseOk){ showToast("Configure o Firebase primeiro (veja o aviso no topo)."); return; }
+
+  const posto = document.getElementById("inpPosto").value;
+  const nome = document.getElementById("inpNome").value.trim();
+  const pin = document.getElementById("inpPin").value.trim();
+
+  if(!nome){ showToast("Digite o nome antes de reservar."); return; }
+  if(!/^\d{4}$/.test(pin)){ showToast("Crie um PIN com exatamente 4 números."); return; }
+
+  const ref = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno));
+  try{
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      const lista = snap.exists() ? (snap.data().lista || []) : [];
+      if(lista.length >= CAPACIDADE){
+        throw new Error("ESGOTADO");
+      }
+      lista.push({ posto, nome, pin, ts: Date.now() });
+      tx.set(ref, { date: selectedDateKey, turno: selectedTurno, lista });
+    });
+    document.getElementById("inpNome").value = "";
+    document.getElementById("inpPin").value = "";
+    showToast("Reserva confirmada.");
+  }catch(e){
+    if(e.message === "ESGOTADO"){
+      showToast("Turno esgotou agora. Escolha outro horário.");
+    }else{
+      console.error(e);
+      showToast("Erro ao reservar. Verifique sua conexão e tente de novo.");
+    }
+  }
+}
+
+function abrirPinCancelamento(idx){
+  pendingCancelIdx = idx;
+  const r = (rosterMap[selectedTurno] || [])[idx];
+  if(!r) return;
+  document.getElementById("pinBoxSub").textContent =
+    `Digite o PIN de 4 dígitos usado na reserva de ${r.posto} ${r.nome}.`;
+  document.getElementById("inpPinCheck").value = "";
+  document.getElementById("pinError").textContent = "";
+  document.getElementById("pinOverlay").classList.add("open");
+  setTimeout(()=>document.getElementById("inpPinCheck").focus(), 50);
+}
+
+function fecharPinCancelamento(){
+  pendingCancelIdx = null;
+  document.getElementById("pinOverlay").classList.remove("open");
+}
+
+async function confirmarCancelamento(){
+  const digitado = document.getElementById("inpPinCheck").value.trim();
+  const r = (rosterMap[selectedTurno] || [])[pendingCancelIdx];
+  if(!r){ fecharPinCancelamento(); return; }
+
+  if(digitado !== r.pin){
+    document.getElementById("pinError").textContent = "PIN incorreto. Tente novamente.";
+    return;
+  }
+
+  const ref = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno));
+  try{
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      const lista = snap.exists() ? (snap.data().lista || []) : [];
+      const alvo = lista[pendingCancelIdx];
+      if(!alvo || alvo.pin !== digitado){
+        throw new Error("PIN_MISMATCH");
+      }
+      lista.splice(pendingCancelIdx, 1);
+      tx.set(ref, { date: selectedDateKey, turno: selectedTurno, lista });
+    });
+    fecharPinCancelamento();
+    showToast("Reserva cancelada.");
+  }catch(e){
+    if(e.message === "PIN_MISMATCH"){
+      document.getElementById("pinError").textContent = "PIN incorreto. Tente novamente.";
+    }else{
+      console.error(e);
+      showToast("Erro ao cancelar. Tente novamente.");
+    }
+  }
+}
+
+function showToast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=>t.classList.remove("show"), 2600);
+}
+
+document.getElementById("btnFechar").onclick = () => {
+  document.getElementById("overlay").classList.remove("open");
+};
+document.getElementById("overlay").onclick = (e) => {
+  if(e.target.id === "overlay") document.getElementById("overlay").classList.remove("open");
+};
+document.getElementById("btnReservar").onclick = reservar;
+document.getElementById("btnPinVoltar").onclick = fecharPinCancelamento;
+document.getElementById("btnPinConfirmar").onclick = confirmarCancelamento;
+document.getElementById("pinOverlay").onclick = (e) => {
+  if(e.target.id === "pinOverlay") fecharPinCancelamento();
+};
+document.getElementById("inpPinCheck").addEventListener("keydown", (e) => {
+  if(e.key === "Enter") confirmarCancelamento();
+});
+
+(function init(){
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  selecionarDia(dateKey(today));
+})();
+</script>
+</body>
+</html>
