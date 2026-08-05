@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Academia do Pampa — Agendamento</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
@@ -20,6 +21,8 @@
   --good-bg:#1B2A24;
   --danger:#C1503F;
   --danger-bg:#2B1C1A;
+  --info:#4C86A8;
+  --info-bg:#16232B;
   --radius:16px;
 }
 *{box-sizing:border-box;}
@@ -39,8 +42,9 @@ body{
   min-height:100vh;
   background:var(--bg);
   position:relative;
-  padding-bottom:32px;
+  padding-bottom:78px;
 }
+.hidden{display:none !important;}
 
 /* ---------- TOP BAR ---------- */
 .topbar{
@@ -48,494 +52,434 @@ body{
   border-bottom:1px solid var(--border);
   background:linear-gradient(180deg, #141D24 0%, var(--bg) 100%);
 }
-.brand{
-  display:flex;
-  align-items:center;
-  gap:12px;
-}
+.brand{display:flex;align-items:center;gap:12px;justify-content:space-between;}
+.brand-left{display:flex;align-items:center;gap:12px;}
 .brand-badge{
-  width:42px;height:42px;
-  border-radius:10px;
+  width:42px;height:42px;border-radius:10px;
   background:radial-gradient(circle at 30% 25%, #2C3944, #121A20);
   border:1px solid var(--border);
   display:flex;align-items:center;justify-content:center;
+  font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:15px;
+  color:var(--accent);letter-spacing:-0.5px;flex-shrink:0;
+}
+.brand-text h1{margin:0;font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:600;letter-spacing:0.5px;color:var(--text);}
+.brand-text p{margin:2px 0 0;font-size:12px;color:var(--text-dim);letter-spacing:0.3px;}
+.btn-logout{
+  background:transparent;border:1px solid var(--border);color:var(--text-dim);
+  font-size:11px;padding:7px 10px;border-radius:8px;cursor:pointer;
   font-family:'IBM Plex Mono',monospace;
-  font-weight:700;
-  font-size:15px;
-  color:var(--accent);
-  letter-spacing:-0.5px;
-  flex-shrink:0;
 }
-.brand-text h1{
-  margin:0;
-  font-family:'IBM Plex Mono',monospace;
-  font-size:19px;
-  font-weight:600;
-  letter-spacing:0.5px;
-  color:var(--text);
-}
-.brand-text p{
-  margin:2px 0 0;
-  font-size:12px;
-  color:var(--text-dim);
-  letter-spacing:0.3px;
-}
-.topbar-meta{
-  margin-top:14px;
-  display:flex;
-  gap:8px;
-  font-family:'IBM Plex Mono',monospace;
-  font-size:11px;
-  color:var(--text-dim);
-}
-.pill-meta{
-  border:1px solid var(--border);
-  border-radius:20px;
-  padding:4px 10px;
-  background:var(--panel);
-}
-.pill-live{
-  border:1px solid rgba(91,146,121,0.4);
-  border-radius:20px;
-  padding:4px 10px;
-  background:var(--good-bg);
-  color:var(--good);
-  display:flex;
-  align-items:center;
-  gap:5px;
-}
-.dot-live{
-  width:6px;height:6px;
-  border-radius:50%;
-  background:var(--good);
-  animation:pulse 1.6s infinite;
-}
+.topbar-meta{margin-top:14px;display:flex;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-dim);flex-wrap:wrap;}
+.pill-meta{border:1px solid var(--border);border-radius:20px;padding:4px 10px;background:var(--panel);}
+.pill-live{border:1px solid rgba(91,146,121,0.4);border-radius:20px;padding:4px 10px;background:var(--good-bg);color:var(--good);display:flex;align-items:center;gap:5px;}
+.dot-live{width:6px;height:6px;border-radius:50%;background:var(--good);animation:pulse 1.6s infinite;}
 @keyframes pulse{0%{opacity:1;}50%{opacity:0.35;}100%{opacity:1;}}
 
+/* ---------- BOTTOM NAV ---------- */
+.bottom-nav{
+  position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+  width:100%;max-width:430px;
+  background:var(--panel-hi);border-top:1px solid var(--border);
+  display:flex;z-index:40;padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+}
+.nav-btn{
+  flex:1;background:none;border:none;color:var(--text-dim);
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  font-size:9.5px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.3px;
+  padding:6px 2px;cursor:pointer;position:relative;text-transform:uppercase;
+}
+.nav-btn .ic{font-size:17px;}
+.nav-btn.active{color:var(--accent);}
+.nav-badge{
+  position:absolute;top:2px;right:22%;background:var(--danger);color:#fff;
+  font-size:9px;border-radius:8px;padding:1px 5px;font-weight:700;
+}
+
 /* ---------- DAY STRIP ---------- */
-.day-strip{
-  display:flex;
-  gap:8px;
-  padding:16px 20px;
-  overflow-x:auto;
-  scrollbar-width:none;
-  border-bottom:1px solid var(--border);
-}
+.day-strip{display:flex;gap:8px;padding:16px 20px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border);}
 .day-strip::-webkit-scrollbar{display:none;}
-.day-chip{
-  flex-shrink:0;
-  min-width:56px;
-  padding:10px 6px 8px;
-  border-radius:12px;
-  border:1px solid var(--border);
-  background:var(--panel);
-  text-align:center;
-  cursor:pointer;
-  transition:all .15s ease;
-}
-.day-chip .dow{
-  font-size:10px;
-  color:var(--text-dim);
-  text-transform:uppercase;
-  letter-spacing:0.5px;
-  font-family:'IBM Plex Mono',monospace;
-}
-.day-chip .dnum{
-  font-size:17px;
-  font-weight:600;
-  margin-top:2px;
-  font-family:'IBM Plex Mono',monospace;
-}
-.day-chip.active{
-  background:var(--accent);
-  border-color:var(--accent);
-}
+.day-chip{flex-shrink:0;min-width:56px;padding:10px 6px 8px;border-radius:12px;border:1px solid var(--border);background:var(--panel);text-align:center;cursor:pointer;transition:all .15s ease;}
+.day-chip .dow{font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;font-family:'IBM Plex Mono',monospace;}
+.day-chip .dnum{font-size:17px;font-weight:600;margin-top:2px;font-family:'IBM Plex Mono',monospace;}
+.day-chip.active{background:var(--accent);border-color:var(--accent);}
 .day-chip.active .dow, .day-chip.active .dnum{color:#1A1204;}
 .day-chip.today .dnum{color:var(--accent);}
 .day-chip.active.today .dnum{color:#1A1204;}
 
 /* ---------- TURNO LIST ---------- */
-.list-label{
-  padding:18px 20px 6px;
-  font-family:'IBM Plex Mono',monospace;
-  font-size:11px;
-  letter-spacing:1px;
-  color:var(--text-dim);
-  text-transform:uppercase;
-}
-.turno-list{
-  padding:6px 16px 8px;
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-}
-.turno-card{
-  background:var(--panel);
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  padding:14px 16px;
-  display:flex;
-  align-items:center;
-  gap:14px;
-  cursor:pointer;
-  transition:border-color .15s ease, transform .1s ease;
-}
+.list-label{padding:18px 20px 6px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:1px;color:var(--text-dim);text-transform:uppercase;}
+.turno-list{padding:6px 16px 8px;display:flex;flex-direction:column;gap:10px;}
+.turno-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:border-color .15s ease, transform .1s ease;}
 .turno-card:active{transform:scale(0.98);}
 .turno-card.full{border-color:rgba(193,80,63,0.35);}
-.turno-time{
-  font-family:'IBM Plex Mono',monospace;
-  font-size:15px;
-  font-weight:600;
-  min-width:98px;
-}
-.turno-time small{
-  display:block;
-  font-size:10px;
-  font-weight:400;
-  color:var(--text-dim);
-  margin-top:1px;
-}
-.gauge{
-  flex:1;
-  display:flex;
-  gap:3px;
-  align-items:center;
-}
-.tick{
-  height:16px;
-  flex:1;
-  border-radius:2px;
-  background:#2A353E;
-}
+.turno-card.mine{border-color:rgba(232,163,61,0.5);}
+.turno-time{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;min-width:98px;}
+.turno-time small{display:block;font-size:10px;font-weight:400;color:var(--text-dim);margin-top:1px;}
+.gauge{flex:1;display:flex;gap:3px;align-items:center;}
+.tick{height:16px;flex:1;border-radius:2px;background:#2A353E;}
 .tick.on{background:var(--accent);}
 .tick.on.full{background:var(--danger);}
-.turno-status{
-  min-width:64px;
-  text-align:right;
-}
-.count{
-  font-family:'IBM Plex Mono',monospace;
-  font-size:14px;
-  font-weight:600;
-}
+.turno-status{min-width:64px;text-align:right;}
+.count{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;}
 .count.full{color:var(--danger);}
-.status-label{
-  font-size:9px;
-  letter-spacing:0.5px;
-  text-transform:uppercase;
-  color:var(--text-dim);
-  margin-top:1px;
-}
+.status-label{font-size:9px;letter-spacing:0.5px;text-transform:uppercase;color:var(--text-dim);margin-top:1px;}
 .status-label.full{color:var(--danger);}
 .status-label.ok{color:var(--good);}
 
-/* ---------- MODAL ---------- */
-.overlay{
-  position:fixed;inset:0;
-  background:rgba(6,9,11,0.6);
-  display:none;
-  align-items:flex-end;
-  justify-content:center;
-  z-index:50;
-}
+/* ---------- MODAL / SHEET ---------- */
+.overlay{position:fixed;inset:0;background:rgba(6,9,11,0.6);display:none;align-items:flex-end;justify-content:center;z-index:50;}
 .overlay.open{display:flex;}
-.sheet{
-  width:100%;
-  max-width:430px;
-  background:var(--panel-hi);
-  border-radius:22px 22px 0 0;
-  border-top:1px solid var(--border);
-  padding:10px 20px 26px;
-  max-height:86vh;
-  overflow-y:auto;
-  animation:slideup .18s ease;
-}
+.sheet{width:100%;max-width:430px;background:var(--panel-hi);border-radius:22px 22px 0 0;border-top:1px solid var(--border);padding:10px 20px 26px;max-height:86vh;overflow-y:auto;animation:slideup .18s ease;}
 @keyframes slideup{from{transform:translateY(30px);opacity:0;}to{transform:translateY(0);opacity:1;}}
-.sheet-handle{
-  width:36px;height:4px;
-  background:var(--border);
-  border-radius:4px;
-  margin:0 auto 16px;
-}
-.sheet-title{
-  font-family:'IBM Plex Mono',monospace;
-  font-size:18px;
-  font-weight:600;
-}
-.sheet-sub{
-  font-size:12px;
-  color:var(--text-dim);
-  margin-top:2px;
-  margin-bottom:16px;
-}
-.roster{
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-  margin-bottom:18px;
-}
-.roster-empty{
-  font-size:13px;
-  color:var(--text-dim);
-  padding:14px 0;
-  text-align:center;
-  border:1px dashed var(--border);
-  border-radius:12px;
-}
-.roster-item{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  background:var(--panel);
-  border:1px solid var(--border);
-  border-radius:10px;
-  padding:9px 12px;
-  gap:10px;
-}
-.roster-item .who{
-  font-size:13.5px;
-}
-.roster-item .who b{
-  font-family:'IBM Plex Mono',monospace;
-  color:var(--accent);
-  margin-right:6px;
-}
-.roster-item .rm{
-  background:var(--danger);
-  border:1px solid var(--danger);
-  color:#FFFFFF;
-  font-size:11.5px;
-  font-weight:700;
-  letter-spacing:0.3px;
-  cursor:pointer;
-  padding:7px 14px;
-  border-radius:8px;
-  flex-shrink:0;
-  transition:all .12s ease;
-}
-.roster-item .rm:hover, .roster-item .rm:active{
-  background:#A5402F;
-  border-color:#A5402F;
-  transform:scale(0.97);
-}
+.sheet-handle{width:36px;height:4px;background:var(--border);border-radius:4px;margin:0 auto 16px;}
+.sheet-title{font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;}
+.sheet-sub{font-size:12px;color:var(--text-dim);margin-top:2px;margin-bottom:16px;}
+.roster{display:flex;flex-direction:column;gap:6px;margin-bottom:18px;}
+.roster-empty{font-size:13px;color:var(--text-dim);padding:14px 0;text-align:center;border:1px dashed var(--border);border-radius:12px;}
+.roster-item{display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:9px 12px;gap:10px;}
+.roster-item.mine{border-color:rgba(232,163,61,0.5);}
+.roster-item .who{font-size:13.5px;}
+.roster-item .who b{font-family:'IBM Plex Mono',monospace;color:var(--accent);margin-right:6px;}
+.roster-item .rm{background:var(--danger);border:1px solid var(--danger);color:#FFFFFF;font-size:11.5px;font-weight:700;letter-spacing:0.3px;cursor:pointer;padding:7px 14px;border-radius:8px;flex-shrink:0;transition:all .12s ease;}
+.roster-item .rm:hover, .roster-item .rm:active{background:#A5402F;border-color:#A5402F;transform:scale(0.97);}
 
 .form-row{margin-bottom:12px;}
-.form-row label{
-  display:block;
-  font-size:11px;
-  color:var(--text-dim);
-  text-transform:uppercase;
-  letter-spacing:0.5px;
-  margin-bottom:6px;
-  font-family:'IBM Plex Mono',monospace;
+.form-row label{display:block;font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;font-family:'IBM Plex Mono',monospace;}
+select, input[type=text], input[type=password], input[type=number], textarea{
+  width:100%;background:var(--panel);border:1px solid var(--border);color:var(--text);
+  padding:11px 12px;border-radius:10px;font-size:14px;font-family:'IBM Plex Sans',sans-serif;
+  appearance:none;-webkit-appearance:none;
 }
-select, input[type=text]{
-  width:100%;
-  background:var(--panel);
-  border:1px solid var(--border);
-  color:var(--text);
-  padding:11px 12px;
-  border-radius:10px;
-  font-size:14px;
-  font-family:'IBM Plex Sans',sans-serif;
-  appearance:none;
-  -webkit-appearance:none;
-}
-select:focus, input:focus{outline:2px solid var(--accent);outline-offset:1px;}
-.btn{
-  width:100%;
-  padding:13px;
-  border-radius:12px;
-  border:none;
-  font-size:14.5px;
-  font-weight:600;
-  font-family:'IBM Plex Sans',sans-serif;
-  cursor:pointer;
-  margin-top:4px;
-}
+textarea{resize:vertical;min-height:80px;}
+select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outline-offset:1px;}
+.btn{width:100%;padding:13px;border-radius:12px;border:none;font-size:14.5px;font-weight:600;font-family:'IBM Plex Sans',sans-serif;cursor:pointer;margin-top:4px;}
 .btn-primary{background:var(--accent);color:#1A1204;}
 .btn-primary:disabled{background:#3A3A32;color:#6E6E64;cursor:not-allowed;}
 .btn-ghost{background:transparent;color:var(--text-dim);border:1px solid var(--border);margin-top:8px;}
-.full-banner{
-  background:var(--danger-bg);
-  border:1px solid rgba(193,80,63,0.4);
-  color:#E6A99E;
-  font-size:12.5px;
-  padding:10px 12px;
-  border-radius:10px;
-  margin-bottom:14px;
-}
-.pin-hint{
-  font-size:11px;
-  color:var(--text-dim);
-  margin-top:-6px;
-  margin-bottom:12px;
-}
-.pin-overlay{
-  position:fixed;inset:0;
-  background:rgba(6,9,11,0.7);
-  display:none;
-  align-items:center;
-  justify-content:center;
-  z-index:80;
-  padding:20px;
-}
-.pin-overlay.open{display:flex;}
-.pin-box{
-  width:100%;
-  max-width:320px;
-  background:var(--panel-hi);
-  border:1px solid var(--border);
-  border-radius:18px;
-  padding:20px;
-}
-.pin-box h3{
-  margin:0 0 4px;
-  font-family:'IBM Plex Mono',monospace;
-  font-size:15px;
-}
-.pin-box p{
-  margin:0 0 14px;
-  font-size:12.5px;
-  color:var(--text-dim);
-}
-.pin-box input{
-  text-align:center;
-  letter-spacing:8px;
-  font-family:'IBM Plex Mono',monospace;
-  font-size:20px;
-}
-.pin-error{
-  font-size:12px;
-  color:var(--danger);
-  margin-top:8px;
-  min-height:14px;
-}
-.pin-actions{
-  display:flex;
-  gap:8px;
-  margin-top:4px;
-}
-.pin-actions .btn{margin-top:0;}
-.toast{
-  position:fixed;
-  bottom:24px;left:50%;
-  transform:translateX(-50%);
-  background:var(--panel-hi);
-  border:1px solid var(--border);
-  color:var(--text);
-  padding:10px 18px;
-  border-radius:30px;
-  font-size:13px;
-  z-index:100;
-  opacity:0;
-  pointer-events:none;
-  transition:opacity .2s ease, transform .2s ease;
-  text-align:center;
-  max-width:85%;
-}
+.btn-danger{background:var(--danger);color:#fff;}
+.btn-good{background:var(--good);color:#0C1611;}
+.btn-sm{width:auto;padding:8px 12px;font-size:12px;margin-top:0;border-radius:8px;}
+.btn-row{display:flex;gap:8px;}
+.btn-row .btn{margin-top:0;}
+.full-banner{background:var(--danger-bg);border:1px solid rgba(193,80,63,0.4);color:#E6A99E;font-size:12.5px;padding:10px 12px;border-radius:10px;margin-bottom:14px;}
+.info-banner{background:var(--info-bg);border:1px solid rgba(76,134,168,0.4);color:#A8CBE0;font-size:12.5px;padding:10px 12px;border-radius:10px;margin-bottom:14px;}
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--panel-hi);border:1px solid var(--border);color:var(--text);padding:10px 18px;border-radius:30px;font-size:13px;z-index:100;opacity:0;pointer-events:none;transition:opacity .2s ease, transform .2s ease;text-align:center;max-width:85%;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(-6px);}
+.config-warning{margin:16px 20px;padding:14px;background:var(--danger-bg);border:1px solid rgba(193,80,63,0.4);border-radius:12px;font-size:12.5px;color:#E6A99E;line-height:1.5;}
+.config-warning code{background:rgba(0,0,0,0.25);padding:1px 5px;border-radius:4px;font-family:'IBM Plex Mono',monospace;}
 
-.config-warning{
-  margin:16px 20px;
-  padding:14px;
-  background:var(--danger-bg);
-  border:1px solid rgba(193,80,63,0.4);
-  border-radius:12px;
-  font-size:12.5px;
-  color:#E6A99E;
-  line-height:1.5;
-}
-.config-warning code{
-  background:rgba(0,0,0,0.25);
-  padding:1px 5px;
-  border-radius:4px;
-  font-family:'IBM Plex Mono',monospace;
-}
+/* ---------- AUTH SCREEN ---------- */
+.auth-wrap{padding:40px 24px;}
+.auth-logo{width:64px;height:64px;border-radius:16px;background:radial-gradient(circle at 30% 25%, #2C3944, #121A20);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:24px;color:var(--accent);margin:0 auto 18px;}
+.auth-title{text-align:center;font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600;margin-bottom:2px;}
+.auth-sub{text-align:center;color:var(--text-dim);font-size:12.5px;margin-bottom:26px;}
+.auth-tabs{display:flex;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:3px;margin-bottom:20px;}
+.auth-tab{flex:1;text-align:center;padding:9px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;color:var(--text-dim);}
+.auth-tab.active{background:var(--accent);color:#1A1204;}
+.auth-error{color:#E6A99E;background:var(--danger-bg);border:1px solid rgba(193,80,63,0.4);border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:12px;display:none;}
+.auth-error.show{display:block;}
+
+/* ---------- STATE SCREENS (pendente/bloqueado) ---------- */
+.state-screen{padding:60px 28px;text-align:center;}
+.state-icon{font-size:40px;margin-bottom:16px;}
+.state-title{font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;margin-bottom:8px;}
+.state-text{color:var(--text-dim);font-size:13.5px;line-height:1.6;margin-bottom:22px;}
+
+/* ---------- GENERIC LIST / CARD ---------- */
+.section-title{padding:18px 20px 8px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:1px;color:var(--text-dim);text-transform:uppercase;}
+.card-list{padding:6px 16px;display:flex;flex-direction:column;gap:10px;}
+.list-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;}
+.list-card .row1{display:flex;justify-content:space-between;align-items:center;gap:10px;}
+.list-card .title{font-weight:600;font-size:14px;}
+.list-card .meta{font-size:11.5px;color:var(--text-dim);margin-top:3px;}
+.list-card .body{font-size:13px;color:var(--text);margin-top:8px;line-height:1.5;white-space:pre-wrap;}
+.tag{font-size:10px;font-family:'IBM Plex Mono',monospace;padding:3px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:0.4px;}
+.tag-pendente{background:var(--info-bg);color:#A8CBE0;}
+.tag-aprovado{background:var(--good-bg);color:var(--good);}
+.tag-bloqueado{background:var(--danger-bg);color:#E6A99E;}
+.tag-pago{background:var(--good-bg);color:var(--good);}
+.tag-devendo{background:var(--danger-bg);color:#E6A99E;}
+.tag-admin{background:var(--accent-dim);color:var(--accent);}
+.tag-nao-lido{background:var(--danger-bg);color:#E6A99E;}
+.empty-state{padding:40px 20px;text-align:center;color:var(--text-dim);font-size:13px;}
+
+/* ---------- ADMIN SUBNAV ---------- */
+.subnav{display:flex;gap:6px;padding:14px 16px 4px;overflow-x:auto;scrollbar-width:none;}
+.subnav::-webkit-scrollbar{display:none;}
+.subnav-btn{flex-shrink:0;background:var(--panel);border:1px solid var(--border);color:var(--text-dim);font-size:11.5px;padding:8px 12px;border-radius:20px;cursor:pointer;font-family:'IBM Plex Mono',monospace;}
+.subnav-btn.active{background:var(--accent);color:#1A1204;border-color:var(--accent);}
+
+/* ---------- CONTAS / CHART ---------- */
+.contas-summary{display:flex;gap:10px;padding:4px 16px 10px;}
+.summary-card{flex:1;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;}
+.summary-card .lbl{font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-family:'IBM Plex Mono',monospace;}
+.summary-card .val{font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600;margin-top:4px;}
+.summary-card.receita .val{color:var(--good);}
+.summary-card.despesa .val{color:var(--danger);}
+.summary-card.saldo .val{color:var(--accent);}
+.chart-box{padding:8px 16px 16px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);margin:0 16px 16px;}
+
+.month-select-wrap{padding:12px 16px 0;}
 </style>
 </head>
 <body>
 <div id="app">
 
-  <div class="topbar">
-    <div class="brand">
-      <div class="brand-badge">P</div>
-      <div class="brand-text">
-        <h1>ACADEMIA DO PAMPA</h1>
-        <p>1º/14º GAV · agendamento de turnos</p>
+  <!-- ===================== AUTH SCREEN ===================== -->
+  <div id="screenAuth" class="hidden">
+    <div class="auth-wrap">
+      <div class="auth-logo">P</div>
+      <div class="auth-title">ACADEMIA DO PAMPA</div>
+      <div class="auth-sub">1º/14º GAV · agendamento de turnos</div>
+
+      <div class="auth-tabs">
+        <div class="auth-tab active" id="tabLogin">Entrar</div>
+        <div class="auth-tab" id="tabCadastro">Cadastrar</div>
       </div>
-    </div>
-    <div class="topbar-meta">
-      <span class="pill-meta">CAP. 15 / TURNO</span>
-      <span class="pill-meta">1H POR TURNO</span>
-      <span class="pill-live"><span class="dot-live"></span>AO VIVO</span>
+
+      <div class="auth-error" id="authError"></div>
+
+      <!-- LOGIN -->
+      <div id="formLogin">
+        <div class="form-row">
+          <label>Matrícula / SARAM</label>
+          <input type="text" id="loginSaram" placeholder="Ex.: 1234567" inputmode="numeric">
+        </div>
+        <div class="form-row">
+          <label>Senha</label>
+          <input type="password" id="loginSenha" placeholder="••••••••">
+        </div>
+        <button class="btn btn-primary" id="btnLogin">Entrar</button>
+      </div>
+
+      <!-- CADASTRO -->
+      <div id="formCadastro" class="hidden">
+        <div class="form-row">
+          <label>Posto/Graduação</label>
+          <select id="cadPosto">
+            <option value="Cel">Cel</option>
+            <option value="Ten Cel">Ten Cel</option>
+            <option value="Maj">Maj</option>
+            <option value="Cap" selected>Cap</option>
+            <option value="1º Ten">1º Ten</option>
+            <option value="2º Ten">2º Ten</option>
+            <option value="Asp">Asp</option>
+            <option value="S Ten">S Ten</option>
+            <option value="1º Sgt">1º Sgt</option>
+            <option value="2º Sgt">2º Sgt</option>
+            <option value="3º Sgt">3º Sgt</option>
+            <option value="Cb">Cb</option>
+            <option value="S1">S1</option>
+            <option value="S2">S2</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Nome</label>
+          <input type="text" id="cadNome" placeholder="Ex.: Santos" maxlength="30">
+        </div>
+        <div class="form-row">
+          <label>Matrícula / SARAM</label>
+          <input type="text" id="cadSaram" placeholder="Ex.: 1234567" inputmode="numeric">
+        </div>
+        <div class="form-row">
+          <label>Senha (mín. 6 caracteres)</label>
+          <input type="password" id="cadSenha" placeholder="••••••••">
+        </div>
+        <div class="form-row">
+          <label>Confirmar senha</label>
+          <input type="password" id="cadSenha2" placeholder="••••••••">
+        </div>
+        <button class="btn btn-primary" id="btnCadastro">Solicitar cadastro</button>
+      </div>
     </div>
   </div>
 
-  <div id="configWarning"></div>
+  <!-- ===================== PENDENTE / BLOQUEADO ===================== -->
+  <div id="screenPendente" class="state-screen hidden">
+    <div class="state-icon">⏳</div>
+    <div class="state-title">Cadastro em análise</div>
+    <div class="state-text">Seu cadastro foi enviado e está aguardando aprovação do administrador da academia. Assim que for aprovado, você poderá agendar seus horários.</div>
+    <button class="btn btn-ghost" id="btnLogoutPendente">Sair</button>
+  </div>
 
-  <div class="day-strip" id="dayStrip"></div>
+  <div id="screenBloqueado" class="state-screen hidden">
+    <div class="state-icon">🚫</div>
+    <div class="state-title">Acesso bloqueado</div>
+    <div class="state-text">Seu acesso à academia está temporariamente bloqueado. Procure a CGDA para regularizar sua situação.</div>
+    <button class="btn btn-ghost" id="btnLogoutBloqueado">Sair</button>
+  </div>
 
-  <div class="list-label" id="listLabel">Turnos disponíveis</div>
-  <div class="turno-list" id="turnoList"></div>
+  <!-- ===================== APP PRINCIPAL ===================== -->
+  <div id="screenApp" class="hidden">
+
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-left">
+          <div class="brand-badge">P</div>
+          <div class="brand-text">
+            <h1>ACADEMIA DO PAMPA</h1>
+            <p id="userGreeting">1º/14º GAV</p>
+          </div>
+        </div>
+        <button class="btn-logout" id="btnLogout">Sair</button>
+      </div>
+      <div class="topbar-meta">
+        <span class="pill-meta">CAP. 15 / TURNO</span>
+        <span class="pill-meta">1H POR TURNO</span>
+        <span class="pill-live"><span class="dot-live"></span>AO VIVO</span>
+      </div>
+    </div>
+
+    <div id="configWarning"></div>
+
+    <!-- ---- TAB: AGENDAR ---- -->
+    <div id="tabAgendar">
+      <div class="day-strip" id="dayStrip"></div>
+      <div class="list-label" id="listLabel">Turnos disponíveis</div>
+      <div class="turno-list" id="turnoList"></div>
+    </div>
+
+    <!-- ---- TAB: MEUS ACESSOS ---- -->
+    <div id="tabMeusAcessos" class="hidden">
+      <div class="section-title">Meus acessos</div>
+      <div id="pagamentoStatusBox" class="card-list"></div>
+      <div class="section-title">Histórico de agendamentos</div>
+      <div class="card-list" id="meusAcessosList"></div>
+    </div>
+
+    <!-- ---- TAB: AVISOS ---- -->
+    <div id="tabAvisos" class="hidden">
+      <div class="section-title">Avisos</div>
+      <div class="card-list" id="avisosList"></div>
+    </div>
+
+    <!-- ---- TAB: CONTAS ---- -->
+    <div id="tabContas" class="hidden">
+      <div class="section-title">Prestação de contas</div>
+      <div class="month-select-wrap">
+        <select id="contasMonthSelect"></select>
+      </div>
+      <div class="contas-summary">
+        <div class="summary-card receita"><div class="lbl">Receitas</div><div class="val" id="contasReceitaVal">R$ 0</div></div>
+        <div class="summary-card despesa"><div class="lbl">Despesas</div><div class="val" id="contasDespesaVal">R$ 0</div></div>
+        <div class="summary-card saldo"><div class="lbl">Saldo</div><div class="val" id="contasSaldoVal">R$ 0</div></div>
+      </div>
+      <div class="chart-box"><canvas id="contasChart" height="180"></canvas></div>
+      <div id="contasAdminAdd" class="hidden">
+        <div class="section-title">Lançar movimentação (admin)</div>
+        <div class="card-list">
+          <div class="list-card">
+            <div class="form-row">
+              <label>Tipo</label>
+              <select id="finTipo"><option value="receita">Receita</option><option value="despesa">Despesa</option></select>
+            </div>
+            <div class="form-row">
+              <label>Valor (R$)</label>
+              <input type="number" id="finValor" placeholder="0.00" step="0.01">
+            </div>
+            <div class="form-row">
+              <label>Descrição</label>
+              <input type="text" id="finDescricao" placeholder="Ex.: Manutenção esteira" maxlength="80">
+            </div>
+            <button class="btn btn-primary" id="btnFinAdd">Lançar</button>
+          </div>
+        </div>
+      </div>
+      <div class="section-title">Lançamentos do mês</div>
+      <div class="card-list" id="contasLista"></div>
+    </div>
+
+    <!-- ---- TAB: ADMIN ---- -->
+    <div id="tabAdmin" class="hidden">
+      <div class="subnav" id="adminSubnav">
+        <div class="subnav-btn active" data-sub="pendentes">Pendentes</div>
+        <div class="subnav-btn" data-sub="usuarios">Usuários</div>
+        <div class="subnav-btn" data-sub="pagamentos">Pagamentos</div>
+        <div class="subnav-btn" data-sub="avisos">Avisos</div>
+      </div>
+
+      <div id="adminPendentes">
+        <div class="card-list" id="pendentesList"></div>
+      </div>
+
+      <div id="adminUsuarios" class="hidden">
+        <div class="section-title">Adicionar usuário</div>
+        <div class="card-list">
+          <div class="list-card">
+            <div class="form-row"><label>Posto/Graduação</label>
+              <select id="addPosto">
+                <option value="Cel">Cel</option><option value="Ten Cel">Ten Cel</option><option value="Maj">Maj</option>
+                <option value="Cap" selected>Cap</option><option value="1º Ten">1º Ten</option><option value="2º Ten">2º Ten</option>
+                <option value="Asp">Asp</option><option value="S Ten">S Ten</option><option value="1º Sgt">1º Sgt</option>
+                <option value="2º Sgt">2º Sgt</option><option value="3º Sgt">3º Sgt</option><option value="Cb">Cb</option>
+                <option value="S1">S1</option><option value="S2">S2</option>
+              </select>
+            </div>
+            <div class="form-row"><label>Nome</label><input type="text" id="addNome" maxlength="30"></div>
+            <div class="form-row"><label>Matrícula / SARAM</label><input type="text" id="addSaram" inputmode="numeric"></div>
+            <div class="form-row"><label>Senha temporária</label><input type="text" id="addSenha" placeholder="mín. 6 caracteres"></div>
+            <button class="btn btn-primary" id="btnAddUser">Criar usuário aprovado</button>
+          </div>
+        </div>
+        <div class="section-title">Todos os usuários</div>
+        <div class="card-list" id="usuariosList"></div>
+      </div>
+
+      <div id="adminPagamentos" class="hidden">
+        <div class="month-select-wrap"><select id="pagMonthSelect"></select></div>
+        <div class="card-list" id="pagamentosList"></div>
+      </div>
+
+      <div id="adminAvisos" class="hidden">
+        <div class="section-title">Publicar novo aviso</div>
+        <div class="card-list">
+          <div class="list-card">
+            <div class="form-row"><label>Título</label><input type="text" id="avisoTitulo" maxlength="60"></div>
+            <div class="form-row"><label>Mensagem</label><textarea id="avisoTexto" maxlength="500"></textarea></div>
+            <button class="btn btn-primary" id="btnPublicarAviso">Publicar aviso</button>
+          </div>
+        </div>
+        <div class="section-title">Avisos publicados</div>
+        <div class="card-list" id="avisosAdminList"></div>
+      </div>
+    </div>
+
+    <!-- ---- BOTTOM NAV ---- -->
+    <div class="bottom-nav" id="bottomNav">
+      <button class="nav-btn active" data-tab="agendar"><span class="ic">📅</span>Agendar</button>
+      <button class="nav-btn" data-tab="meus"><span class="ic">🕓</span>Meus acessos</button>
+      <button class="nav-btn" data-tab="avisos"><span class="ic">📣</span>Avisos<span class="nav-badge hidden" id="navAvisoBadge">!</span></button>
+      <button class="nav-btn" data-tab="contas"><span class="ic">💰</span>Contas</button>
+      <button class="nav-btn hidden" data-tab="admin" id="navAdminBtn"><span class="ic">⚙️</span>Admin</button>
+    </div>
+
+  </div>
 
 </div>
 
+<!-- ===================== SHEET: RESERVA ===================== -->
 <div class="overlay" id="overlay">
   <div class="sheet">
     <div class="sheet-handle"></div>
     <div class="sheet-title" id="sheetTitle">--</div>
     <div class="sheet-sub" id="sheetSub">--</div>
-
     <div id="fullBanner"></div>
-
     <div class="roster" id="roster"></div>
-
     <div id="reserveForm">
-      <div class="form-row">
-        <label>Posto/Graduação</label>
-        <select id="inpPosto">
-          <option value="Cel">Cel</option>
-          <option value="Ten Cel">Ten Cel</option>
-          <option value="Maj">Maj</option>
-          <option value="Cap" selected>Cap</option>
-          <option value="1º Ten">1º Ten</option>
-          <option value="2º Ten">2º Ten</option>
-          <option value="Asp">Asp</option>
-          <option value="S Ten">S Ten</option>
-          <option value="1º Sgt">1º Sgt</option>
-          <option value="2º Sgt">2º Sgt</option>
-          <option value="3º Sgt">3º Sgt</option>
-          <option value="Cb">Cb</option>
-          <option value="S1">S1</option>
-          <option value="S2">S2</option>
-        </select>
-      </div>
-      <div class="form-row">
-        <label>Nome</label>
-        <input type="text" id="inpNome" placeholder="Ex.: Santos" maxlength="30">
-      </div>
-      <div class="form-row">
-        <label>Senha de 4 dígitos</label>
-        <input type="text" id="inpPin" placeholder="0000" inputmode="numeric" maxlength="4">
-        <div class="pin-hint">Guarde esse número — você vai precisar dele para cancelar depois.</div>
-      </div>
       <button class="btn btn-primary" id="btnReservar">Reservar vaga</button>
     </div>
     <button class="btn btn-ghost" id="btnFechar">Fechar</button>
   </div>
 </div>
 
-<div class="pin-overlay" id="pinOverlay">
-  <div class="pin-box">
-    <h3>Cancelar reserva</h3>
-    <p id="pinBoxSub">Digite a senha de 4 dígitos usada nessa reserva.</p>
-    <input type="text" id="inpPinCheck" placeholder="••••" inputmode="numeric" maxlength="4">
-    <div class="pin-error" id="pinError"></div>
-    <div class="pin-actions">
-      <button class="btn btn-ghost" id="btnPinVoltar">Voltar</button>
-      <button class="btn btn-primary" id="btnPinConfirmar">Confirmar</button>
-    </div>
+<!-- ===================== SHEET: AVISO OBRIGATÓRIO ===================== -->
+<div class="overlay" id="avisoGateOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">⚠️ Aviso importante</div>
+    <div class="sheet-sub">Você precisa confirmar ciência antes de agendar.</div>
+    <div class="card-list" id="avisoGateList" style="padding:0;"></div>
+    <button class="btn btn-ghost" id="btnAvisoGateFechar">Fechar</button>
   </div>
 </div>
 
@@ -544,14 +488,16 @@ select:focus, input:focus{outline:2px solid var(--accent);outline-offset:1px;}
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
-  getFirestore, doc, collection, query, where,
-  onSnapshot, runTransaction
+  getFirestore, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
+  collection, query, where, orderBy, onSnapshot, runTransaction, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import {
+  getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  signOut, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 
 /* =======================================================================
-   1) COLE AQUI a configuração do seu projeto Firebase.
-      Vem do painel: Configurações do projeto > Seus apps > SDK setup.
-      Sem isso preenchido, o app mostra um aviso e não funciona.
+   Configuração do Firebase — já preenchida com o projeto atual.
    ======================================================================= */
 const firebaseConfig = {
   apiKey: "AIzaSyA_Ll4fZx1WV5J-SRvqWjGAnNQjgatl53Y",
@@ -570,61 +516,218 @@ const TURNOS = [
 ];
 const DOWS = ["DOM","SEG","TER","QUA","QUI","SEX","SÁB"];
 const COLLECTION = "reservas_academia";
+const EMAIL_DOMAIN = "@academiapampa.local";
 
-let db = null;
+let db = null, auth = null;
 let firebaseOk = firebaseConfig.apiKey !== "COLE_AQUI_SUA_API_KEY";
 
 if(firebaseOk){
   try{
     const app = initializeApp(firebaseConfig);
     db = getFirestore(app);
+    auth = getAuth(app);
   }catch(e){
     firebaseOk = false;
     console.error(e);
   }
 }else{
   document.getElementById("configWarning").innerHTML = `
-    <div class="config-warning">
-      <b>Configuração do Firebase pendente.</b><br>
-      Abra o arquivo HTML, encontre o bloco <code>firebaseConfig</code> perto do topo do script,
-      e cole as chaves do seu projeto Firebase no lugar de "COLE_AQUI". Depois disso o agendamento
-      passa a funcionar em tempo real para todo o efetivo.
-    </div>`;
+    <div class="config-warning"><b>Configuração do Firebase pendente.</b></div>`;
 }
+
+function saramToEmail(saram){
+  return String(saram).trim().toLowerCase().replace(/\s+/g,"") + EMAIL_DOMAIN;
+}
+function mesKey(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
+function mesLabel(mk){
+  const [y,m] = mk.split("-");
+  const nomes = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+  return nomes[parseInt(m)-1] + "/" + y;
+}
+function fmtBRL(v){ return "R$ " + (v||0).toLocaleString("pt-BR",{minimumFractionDigits:2, maximumFractionDigits:2}); }
+function showToast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=>t.classList.remove("show"), 2800);
+}
+
+/* =======================================================================
+   ESTADO GLOBAL
+   ======================================================================= */
+let currentUser = null;   // { uid, saram, nome, posto, isAdmin, status }
+let currentTab = "agendar";
+let unreadAvisos = [];
 
 let selectedDateKey = null;
 let selectedTurno = null;
-let rosterMap = {};       // { turno: [ {posto,nome,pin,ts}, ... ] }
-let unsubscribe = null;
-let pendingCancelIdx = null;
+let rosterMap = {};
+let unsubscribeReservas = null;
 
-function dateKey(d){
-  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+/* =======================================================================
+   AUTENTICAÇÃO
+   ======================================================================= */
+document.getElementById("tabLogin").onclick = () => switchAuthTab("login");
+document.getElementById("tabCadastro").onclick = () => switchAuthTab("cadastro");
+function switchAuthTab(which){
+  document.getElementById("tabLogin").classList.toggle("active", which==="login");
+  document.getElementById("tabCadastro").classList.toggle("active", which==="cadastro");
+  document.getElementById("formLogin").classList.toggle("hidden", which!=="login");
+  document.getElementById("formCadastro").classList.toggle("hidden", which!=="cadastro");
+  hideAuthError();
 }
-function fmtDatePt(d){
-  return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear();
+function showAuthError(msg){
+  const el = document.getElementById("authError");
+  el.textContent = msg;
+  el.classList.add("show");
 }
-function isToday(d){
-  const t = new Date();
-  return d.toDateString() === t.toDateString();
+function hideAuthError(){ document.getElementById("authError").classList.remove("show"); }
+
+document.getElementById("btnLogin").onclick = async () => {
+  hideAuthError();
+  const saram = document.getElementById("loginSaram").value.trim();
+  const senha = document.getElementById("loginSenha").value;
+  if(!saram || !senha){ showAuthError("Preencha matrícula/SARAM e senha."); return; }
+  try{
+    await signInWithEmailAndPassword(auth, saramToEmail(saram), senha);
+  }catch(e){
+    console.error(e);
+    showAuthError("Matrícula/SARAM ou senha incorretos.");
+  }
+};
+
+document.getElementById("btnCadastro").onclick = async () => {
+  hideAuthError();
+  const posto = document.getElementById("cadPosto").value;
+  const nome = document.getElementById("cadNome").value.trim();
+  const saram = document.getElementById("cadSaram").value.trim();
+  const senha = document.getElementById("cadSenha").value;
+  const senha2 = document.getElementById("cadSenha2").value;
+  if(!nome || !saram){ showAuthError("Preencha nome e matrícula/SARAM."); return; }
+  if(senha.length < 6){ showAuthError("A senha precisa ter pelo menos 6 caracteres."); return; }
+  if(senha !== senha2){ showAuthError("As senhas não coincidem."); return; }
+
+  try{
+    // Primeiro usuário do sistema vira admin aprovado automaticamente (bootstrap)
+    const usuariosSnap = await getDocs(collection(db, "usuarios"));
+    const isFirst = usuariosSnap.empty;
+
+    const cred = await createUserWithEmailAndPassword(auth, saramToEmail(saram), senha);
+    await setDoc(doc(db, "usuarios", saram), {
+      saram, nome, posto,
+      status: isFirst ? "aprovado" : "pendente",
+      isAdmin: isFirst,
+      criadoEm: serverTimestamp()
+    });
+    if(isFirst){
+      showToast("Cadastro criado como administrador inicial.");
+    }
+  }catch(e){
+    console.error(e);
+    if(e.code === "auth/email-already-in-use"){
+      showAuthError("Essa matrícula/SARAM já possui cadastro.");
+    }else{
+      showAuthError("Erro ao cadastrar. Tente novamente.");
+    }
+  }
+};
+
+document.getElementById("btnLogoutPendente").onclick = () => signOut(auth);
+document.getElementById("btnLogoutBloqueado").onclick = () => signOut(auth);
+document.getElementById("btnLogout").onclick = () => signOut(auth);
+
+function showScreen(id){
+  ["screenAuth","screenPendente","screenBloqueado","screenApp"].forEach(s=>{
+    document.getElementById(s).classList.toggle("hidden", s!==id);
+  });
 }
-function docId(dateK, turno){
-  return dateK + "_" + turno;
+
+onAuthStateChanged(auth, async (user) => {
+  if(unsubscribeReservas){ unsubscribeReservas(); unsubscribeReservas = null; }
+  if(!user){
+    currentUser = null;
+    showScreen("screenAuth");
+    switchAuthTab("login");
+    return;
+  }
+  const saram = user.email.replace(EMAIL_DOMAIN, "");
+  const udoc = await getDoc(doc(db, "usuarios", saram));
+  if(!udoc.exists()){
+    showScreen("screenAuth");
+    return;
+  }
+  const data = udoc.data();
+  currentUser = { uid: user.uid, saram, nome: data.nome, posto: data.posto, isAdmin: !!data.isAdmin, status: data.status };
+
+  if(data.status === "pendente"){ showScreen("screenPendente"); return; }
+  if(data.status === "bloqueado"){ showScreen("screenBloqueado"); return; }
+
+  showScreen("screenApp");
+  document.getElementById("userGreeting").textContent =
+    `${currentUser.posto} ${currentUser.nome}` + (currentUser.isAdmin ? " · Admin" : "");
+  document.getElementById("navAdminBtn").classList.toggle("hidden", !currentUser.isAdmin);
+  document.getElementById("contasAdminAdd").classList.toggle("hidden", !currentUser.isAdmin);
+
+  initAvisosWatch();
+  switchTab("agendar");
+  const today = new Date(); today.setHours(0,0,0,0);
+  selecionarDia(dateKey(today));
+  buildMonthSelectors();
+});
+
+/* =======================================================================
+   NAVEGAÇÃO POR ABAS
+   ======================================================================= */
+document.querySelectorAll(".nav-btn").forEach(btn=>{
+  btn.onclick = () => switchTab(btn.dataset.tab);
+});
+function switchTab(tab){
+  currentTab = tab;
+  document.querySelectorAll(".nav-btn").forEach(b=>b.classList.toggle("active", b.dataset.tab===tab));
+  ["tabAgendar","tabMeusAcessos","tabAvisos","tabContas","tabAdmin"].forEach(id=>{
+    document.getElementById(id).classList.toggle("hidden", id !== "tab"+capitalize(tab==="meus"?"MeusAcessos":tab));
+  });
+  if(tab==="meus") renderMeusAcessos();
+  if(tab==="avisos") renderAvisosTab();
+  if(tab==="contas") renderContasTab();
+  if(tab==="admin") renderAdminTab();
 }
+function capitalize(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+
+document.querySelectorAll(".subnav-btn").forEach(btn=>{
+  btn.onclick = () => {
+    document.querySelectorAll(".subnav-btn").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    const sub = btn.dataset.sub;
+    ["Pendentes","Usuarios","Pagamentos","Avisos"].forEach(s=>{
+      document.getElementById("admin"+s).classList.toggle("hidden", s.toLowerCase()!==sub);
+    });
+    if(sub==="usuarios") renderUsuariosList();
+    if(sub==="pagamentos") renderPagamentosList();
+    if(sub==="avisos") renderAvisosAdminList();
+  };
+});
+
+/* =======================================================================
+   AGENDAMENTO (adaptado para usuário logado)
+   ======================================================================= */
+function dateKey(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function fmtDatePt(d){ return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear(); }
+function isToday(d){ const t = new Date(); return d.toDateString() === t.toDateString(); }
+function docId(dateK, turno){ return dateK + "_" + turno; }
 
 function buildDayStrip(){
   const strip = document.getElementById("dayStrip");
   strip.innerHTML = "";
-  const today = new Date();
-  today.setHours(0,0,0,0);
+  const today = new Date(); today.setHours(0,0,0,0);
   for(let i=0;i<14;i++){
-    const d = new Date(today);
-    d.setDate(d.getDate()+i);
+    const d = new Date(today); d.setDate(d.getDate()+i);
     const k = dateKey(d);
     const chip = document.createElement("div");
     chip.className = "day-chip" + (k===selectedDateKey ? " active":"") + (isToday(d) ? " today":"");
     chip.innerHTML = `<div class="dow">${DOWS[d.getDay()]}</div><div class="dnum">${String(d.getDate()).padStart(2,"0")}</div>`;
-    chip.onclick = () => { selecionarDia(k); };
+    chip.onclick = () => selecionarDia(k);
     strip.appendChild(chip);
   }
 }
@@ -640,9 +743,10 @@ function renderTurnoList(){
     const roster = rosterMap[turno] || [];
     const count = roster.length;
     const full = count >= CAPACIDADE;
+    const mine = roster.some(r => r.saram === currentUser?.saram);
 
     const card = document.createElement("div");
-    card.className = "turno-card" + (full ? " full":"");
+    card.className = "turno-card" + (full ? " full":"") + (mine ? " mine":"");
     card.onclick = () => openSheet(turno);
 
     const [ini,fim] = turno.split("-");
@@ -651,15 +755,13 @@ function renderTurnoList(){
       const on = i < count;
       ticks += `<div class="tick ${on?"on":""} ${on&&full?"full":""}"></div>`;
     }
-
     card.innerHTML = `
       <div class="turno-time">${ini}<small>${fim}</small></div>
       <div class="gauge">${ticks}</div>
       <div class="turno-status">
         <div class="count ${full?"full":""}">${count}/${CAPACIDADE}</div>
-        <div class="status-label ${full?"full":"ok"}">${full?"ESGOTADO":"DISPONÍVEL"}</div>
-      </div>
-    `;
+        <div class="status-label ${full?"full":"ok"}">${mine ? "VOCÊ ESTÁ AQUI" : (full?"ESGOTADO":"DISPONÍVEL")}</div>
+      </div>`;
     list.appendChild(card);
   });
 
@@ -678,10 +780,9 @@ function selecionarDia(k){
 
 function assinarDia(){
   if(!firebaseOk) return;
-  if(unsubscribe) unsubscribe();
-
+  if(unsubscribeReservas) unsubscribeReservas();
   const q = query(collection(db, COLLECTION), where("date", "==", selectedDateKey));
-  unsubscribe = onSnapshot(q, (snap) => {
+  unsubscribeReservas = onSnapshot(q, (snap) => {
     const novo = {};
     snap.forEach(docSnap => {
       const data = docSnap.data();
@@ -689,10 +790,7 @@ function assinarDia(){
     });
     rosterMap = novo;
     renderTurnoList();
-  }, (err) => {
-    console.error(err);
-    showToast("Erro ao conectar com o banco de dados.");
-  });
+  }, (err) => { console.error(err); showToast("Erro ao conectar com o banco de dados."); });
 }
 
 function openSheet(turno){
@@ -704,6 +802,7 @@ function openSheet(turno){
 function refreshSheetRoster(){
   const roster = rosterMap[selectedTurno] || [];
   const full = roster.length >= CAPACIDADE;
+  const jaReservado = roster.some(r => r.saram === currentUser?.saram);
   const d = new Date(selectedDateKey+"T00:00:00");
 
   document.getElementById("sheetTitle").textContent = selectedTurno;
@@ -713,21 +812,23 @@ function refreshSheetRoster(){
   if(roster.length===0){
     rosterEl.innerHTML = `<div class="roster-empty">Nenhuma reserva ainda neste turno.</div>`;
   }else{
-    rosterEl.innerHTML = roster.map((r,idx) => `
-      <div class="roster-item">
+    rosterEl.innerHTML = roster.map((r) => `
+      <div class="roster-item ${r.saram===currentUser?.saram ? "mine":""}">
         <div class="who"><b>${r.posto}</b>${r.nome}</div>
-        <button class="rm" data-idx="${idx}" title="Cancelar reserva">Cancelar</button>
-      </div>
-    `).join("");
+        ${(r.saram===currentUser?.saram || currentUser.isAdmin) ? `<button class="rm" data-saram="${r.saram}">Cancelar</button>` : ""}
+      </div>`).join("");
     rosterEl.querySelectorAll(".rm").forEach(btn=>{
-      btn.onclick = () => abrirPinCancelamento(parseInt(btn.dataset.idx));
+      btn.onclick = () => cancelarReserva(btn.dataset.saram);
     });
   }
 
   const banner = document.getElementById("fullBanner");
   const form = document.getElementById("reserveForm");
-  if(full){
+  if(full && !jaReservado){
     banner.innerHTML = `<div class="full-banner">Turno esgotado. Escolha outro horário ou aguarde uma vaga liberar.</div>`;
+    form.style.display = "none";
+  }else if(jaReservado){
+    banner.innerHTML = `<div class="info-banner">Você já está reservado neste turno.</div>`;
     form.style.display = "none";
   }else{
     banner.innerHTML = "";
@@ -736,119 +837,417 @@ function refreshSheetRoster(){
 }
 
 async function reservar(){
-  if(!firebaseOk){ showToast("Configure o Firebase primeiro (veja o aviso no topo)."); return; }
-
-  const posto = document.getElementById("inpPosto").value;
-  const nome = document.getElementById("inpNome").value.trim();
-  const pin = document.getElementById("inpPin").value.trim();
-
-  if(!nome){ showToast("Digite o nome antes de reservar."); return; }
-  if(!/^\d{4}$/.test(pin)){ showToast("Crie um PIN com exatamente 4 números."); return; }
-
-  const ref = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno));
-  try{
-    await runTransaction(db, async (tx) => {
-      const snap = await tx.get(ref);
-      const lista = snap.exists() ? (snap.data().lista || []) : [];
-      if(lista.length >= CAPACIDADE){
-        throw new Error("ESGOTADO");
-      }
-      lista.push({ posto, nome, pin, ts: Date.now() });
-      tx.set(ref, { date: selectedDateKey, turno: selectedTurno, lista });
-    });
-    document.getElementById("inpNome").value = "";
-    document.getElementById("inpPin").value = "";
-    showToast("Reserva confirmada.");
-  }catch(e){
-    if(e.message === "ESGOTADO"){
-      showToast("Turno esgotou agora. Escolha outro horário.");
-    }else{
-      console.error(e);
-      showToast("Erro ao reservar. Verifique sua conexão e tente de novo.");
-    }
-  }
-}
-
-function abrirPinCancelamento(idx){
-  pendingCancelIdx = idx;
-  const r = (rosterMap[selectedTurno] || [])[idx];
-  if(!r) return;
-  document.getElementById("pinBoxSub").textContent =
-    `Digite o PIN de 4 dígitos usado na reserva de ${r.posto} ${r.nome}.`;
-  document.getElementById("inpPinCheck").value = "";
-  document.getElementById("pinError").textContent = "";
-  document.getElementById("pinOverlay").classList.add("open");
-  setTimeout(()=>document.getElementById("inpPinCheck").focus(), 50);
-}
-
-function fecharPinCancelamento(){
-  pendingCancelIdx = null;
-  document.getElementById("pinOverlay").classList.remove("open");
-}
-
-async function confirmarCancelamento(){
-  const digitado = document.getElementById("inpPinCheck").value.trim();
-  const r = (rosterMap[selectedTurno] || [])[pendingCancelIdx];
-  if(!r){ fecharPinCancelamento(); return; }
-
-  if(digitado !== r.pin){
-    document.getElementById("pinError").textContent = "PIN incorreto. Tente novamente.";
+  if(!firebaseOk){ showToast("Firebase indisponível no momento."); return; }
+  if(unreadAvisos.length > 0){
+    switchTab("avisos");
+    document.getElementById("overlay").classList.remove("open");
+    showToast("Confirme ciência dos avisos antes de agendar.");
+    openAvisoGate();
     return;
   }
-
   const ref = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno));
   try{
     await runTransaction(db, async (tx) => {
       const snap = await tx.get(ref);
       const lista = snap.exists() ? (snap.data().lista || []) : [];
-      const alvo = lista[pendingCancelIdx];
-      if(!alvo || alvo.pin !== digitado){
-        throw new Error("PIN_MISMATCH");
-      }
-      lista.splice(pendingCancelIdx, 1);
+      if(lista.length >= CAPACIDADE) throw new Error("ESGOTADO");
+      if(lista.some(r=>r.saram===currentUser.saram)) throw new Error("JA_RESERVADO");
+      lista.push({ saram: currentUser.saram, posto: currentUser.posto, nome: currentUser.nome, ts: Date.now() });
       tx.set(ref, { date: selectedDateKey, turno: selectedTurno, lista });
     });
-    fecharPinCancelamento();
-    showToast("Reserva cancelada.");
+    await setDoc(doc(db, "historico", `${currentUser.saram}_${selectedDateKey}_${selectedTurno}`), {
+      saram: currentUser.saram, nome: currentUser.nome, posto: currentUser.posto,
+      date: selectedDateKey, turno: selectedTurno, status: "ativo", criadoEm: serverTimestamp()
+    });
+    showToast("Reserva confirmada.");
   }catch(e){
-    if(e.message === "PIN_MISMATCH"){
-      document.getElementById("pinError").textContent = "PIN incorreto. Tente novamente.";
-    }else{
-      console.error(e);
-      showToast("Erro ao cancelar. Tente novamente.");
-    }
+    if(e.message === "ESGOTADO") showToast("Turno esgotou agora. Escolha outro horário.");
+    else if(e.message === "JA_RESERVADO") showToast("Você já está reservado neste turno.");
+    else { console.error(e); showToast("Erro ao reservar. Tente novamente."); }
   }
 }
 
-function showToast(msg){
-  const t = document.getElementById("toast");
-  t.textContent = msg;
-  t.classList.add("show");
-  clearTimeout(t._timer);
-  t._timer = setTimeout(()=>t.classList.remove("show"), 2600);
+async function cancelarReserva(saram){
+  const ref = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno));
+  try{
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      const lista = snap.exists() ? (snap.data().lista || []) : [];
+      const novaLista = lista.filter(r => r.saram !== saram);
+      tx.set(ref, { date: selectedDateKey, turno: selectedTurno, lista: novaLista });
+    });
+    await updateDoc(doc(db, "historico", `${saram}_${selectedDateKey}_${selectedTurno}`), { status: "cancelado" }).catch(()=>{});
+    showToast("Reserva cancelada.");
+  }catch(e){ console.error(e); showToast("Erro ao cancelar. Tente novamente."); }
 }
 
-document.getElementById("btnFechar").onclick = () => {
-  document.getElementById("overlay").classList.remove("open");
-};
-document.getElementById("overlay").onclick = (e) => {
-  if(e.target.id === "overlay") document.getElementById("overlay").classList.remove("open");
-};
+document.getElementById("btnFechar").onclick = () => document.getElementById("overlay").classList.remove("open");
+document.getElementById("overlay").onclick = (e) => { if(e.target.id === "overlay") document.getElementById("overlay").classList.remove("open"); };
 document.getElementById("btnReservar").onclick = reservar;
-document.getElementById("btnPinVoltar").onclick = fecharPinCancelamento;
-document.getElementById("btnPinConfirmar").onclick = confirmarCancelamento;
-document.getElementById("pinOverlay").onclick = (e) => {
-  if(e.target.id === "pinOverlay") fecharPinCancelamento();
-};
-document.getElementById("inpPinCheck").addEventListener("keydown", (e) => {
-  if(e.key === "Enter") confirmarCancelamento();
-});
 
-(function init(){
-  const today = new Date();
-  today.setHours(0,0,0,0);
-  selecionarDia(dateKey(today));
-})();
+/* =======================================================================
+   MEUS ACESSOS
+   ======================================================================= */
+async function renderMeusAcessos(){
+  const box = document.getElementById("pagamentoStatusBox");
+  const mk = mesKey(new Date());
+  try{
+    const pagDoc = await getDoc(doc(db, "pagamentos", `${currentUser.saram}_${mk}`));
+    const pago = pagDoc.exists() && pagDoc.data().pago;
+    box.innerHTML = `<div class="list-card row1" style="display:flex;justify-content:space-between;align-items:center;">
+      <div><div class="title">Mensalidade — ${mesLabel(mk)}</div><div class="meta">Status do pagamento deste mês</div></div>
+      <span class="tag ${pago?"tag-pago":"tag-devendo"}">${pago?"Pago":"Pendente"}</span>
+    </div>`;
+  }catch(e){ console.error(e); box.innerHTML = ""; }
+
+  const list = document.getElementById("meusAcessosList");
+  list.innerHTML = `<div class="empty-state">Carregando...</div>`;
+  try{
+    const q = query(collection(db,"historico"), where("saram","==",currentUser.saram), orderBy("date","desc"));
+    const snap = await getDocs(q);
+    if(snap.empty){ list.innerHTML = `<div class="empty-state">Nenhum agendamento ainda.</div>`; return; }
+    let html = "";
+    snap.forEach(d=>{
+      const it = d.data();
+      const cancelado = it.status === "cancelado";
+      html += `<div class="list-card">
+        <div class="row1">
+          <div class="title">${it.turno}</div>
+          <span class="tag ${cancelado?"tag-bloqueado":"tag-aprovado"}">${cancelado?"Cancelado":"Confirmado"}</span>
+        </div>
+        <div class="meta">${fmtDatePt(new Date(it.date+"T00:00:00"))}</div>
+      </div>`;
+    });
+    list.innerHTML = html;
+  }catch(e){ console.error(e); list.innerHTML = `<div class="empty-state">Erro ao carregar histórico.</div>`; }
+}
+
+/* =======================================================================
+   AVISOS
+   ======================================================================= */
+function initAvisosWatch(){
+  onSnapshot(query(collection(db,"avisos"), orderBy("criadoEm","desc")), async (snap) => {
+    const todos = [];
+    snap.forEach(d=>todos.push({id:d.id, ...d.data()}));
+    const lidosSnap = await getDocs(query(collection(db,"avisos_lidos"), where("saram","==",currentUser.saram)));
+    const lidosIds = new Set();
+    lidosSnap.forEach(d=>lidosIds.add(d.data().avisoId));
+    unreadAvisos = todos.filter(a => !lidosIds.has(a.id));
+    document.getElementById("navAvisoBadge").classList.toggle("hidden", unreadAvisos.length===0);
+    if(currentTab==="avisos") renderAvisosTab();
+  });
+}
+
+async function renderAvisosTab(){
+  const list = document.getElementById("avisosList");
+  list.innerHTML = `<div class="empty-state">Carregando...</div>`;
+  const snap = await getDocs(query(collection(db,"avisos"), orderBy("criadoEm","desc")));
+  if(snap.empty){ list.innerHTML = `<div class="empty-state">Nenhum aviso publicado.</div>`; return; }
+  const lidosSnap = await getDocs(query(collection(db,"avisos_lidos"), where("saram","==",currentUser.saram)));
+  const lidosIds = new Set();
+  lidosSnap.forEach(d=>lidosIds.add(d.data().avisoId));
+
+  let html = "";
+  snap.forEach(d=>{
+    const a = d.data();
+    const lido = lidosIds.has(d.id);
+    html += `<div class="list-card">
+      <div class="row1">
+        <div class="title">${a.titulo}</div>
+        ${lido ? `<span class="tag tag-aprovado">Ciente</span>` : `<span class="tag tag-nao-lido">Novo</span>`}
+      </div>
+      <div class="body">${a.texto}</div>
+      ${!lido ? `<button class="btn btn-primary btn-sm" style="margin-top:10px;width:100%;" data-id="${d.id}">Marcar como ciente</button>` : ""}
+    </div>`;
+  });
+  list.innerHTML = html;
+  list.querySelectorAll("button[data-id]").forEach(btn=>{
+    btn.onclick = () => marcarCiente(btn.dataset.id);
+  });
+}
+
+async function marcarCiente(avisoId){
+  await setDoc(doc(db,"avisos_lidos", `${currentUser.saram}_${avisoId}`), {
+    saram: currentUser.saram, avisoId, lidoEm: serverTimestamp()
+  });
+  showToast("Ciência registrada.");
+  renderAvisosTab();
+}
+
+function openAvisoGate(){
+  const list = document.getElementById("avisoGateList");
+  list.innerHTML = unreadAvisos.map(a => `
+    <div class="list-card">
+      <div class="title">${a.titulo}</div>
+      <div class="body">${a.texto}</div>
+      <button class="btn btn-primary btn-sm" style="margin-top:10px;width:100%;" data-id="${a.id}">Marcar como ciente</button>
+    </div>`).join("");
+  list.querySelectorAll("button[data-id]").forEach(btn=>{
+    btn.onclick = async () => { await marcarCiente(btn.dataset.id); if(unreadAvisos.length<=1) document.getElementById("avisoGateOverlay").classList.remove("open"); openAvisoGate(); };
+  });
+  document.getElementById("avisoGateOverlay").classList.add("open");
+}
+document.getElementById("btnAvisoGateFechar").onclick = () => document.getElementById("avisoGateOverlay").classList.remove("open");
+
+/* =======================================================================
+   PRESTAÇÃO DE CONTAS
+   ======================================================================= */
+let contasChartInstance = null;
+function buildMonthSelectors(){
+  const now = new Date();
+  const opts = [];
+  for(let i=0;i<12;i++){
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    const mk = mesKey(d);
+    opts.push(`<option value="${mk}">${mesLabel(mk)}</option>`);
+  }
+  document.getElementById("contasMonthSelect").innerHTML = opts.join("");
+  document.getElementById("pagMonthSelect").innerHTML = opts.join("");
+}
+document.getElementById("contasMonthSelect").addEventListener("change", renderContasTab);
+document.getElementById("pagMonthSelect").addEventListener("change", renderPagamentosList);
+
+async function renderContasTab(){
+  const mk = document.getElementById("contasMonthSelect").value || mesKey(new Date());
+  document.getElementById("contasMonthSelect").value = mk;
+  const snap = await getDocs(query(collection(db,"financas"), where("mes","==",mk)));
+  let receita = 0, despesa = 0;
+  const itens = [];
+  snap.forEach(d=>{
+    const it = d.data();
+    if(it.tipo==="receita") receita += it.valor; else despesa += it.valor;
+    itens.push({id:d.id, ...it});
+  });
+  document.getElementById("contasReceitaVal").textContent = fmtBRL(receita);
+  document.getElementById("contasDespesaVal").textContent = fmtBRL(despesa);
+  document.getElementById("contasSaldoVal").textContent = fmtBRL(receita-despesa);
+
+  const ctx = document.getElementById("contasChart");
+  if(contasChartInstance) contasChartInstance.destroy();
+  if(window.Chart){
+    contasChartInstance = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: ["Receitas","Despesas"],
+        datasets: [{ data:[receita,despesa], backgroundColor:["#5B9279","#C1503F"], borderRadius:6 }]
+      },
+      options: {
+        plugins:{legend:{display:false}},
+        scales:{ y:{ ticks:{color:"#8CA0AA"}, grid:{color:"#2B3944"} }, x:{ ticks:{color:"#8CA0AA"}, grid:{display:false} } }
+      }
+    });
+  }
+
+  const lista = document.getElementById("contasLista");
+  if(itens.length===0){ lista.innerHTML = `<div class="empty-state">Nenhum lançamento neste mês.</div>`; }
+  else{
+    lista.innerHTML = itens.map(it=>`
+      <div class="list-card row1" style="display:flex;justify-content:space-between;">
+        <div><div class="title">${it.descricao}</div><div class="meta">${it.tipo==="receita"?"Receita":"Despesa"}</div></div>
+        <div style="font-family:'IBM Plex Mono',monospace;color:${it.tipo==="receita"?"var(--good)":"var(--danger)"};font-weight:600;">${it.tipo==="despesa"?"-":"+"}${fmtBRL(it.valor)}</div>
+      </div>`).join("");
+  }
+}
+
+document.getElementById("btnFinAdd").onclick = async () => {
+  if(!currentUser.isAdmin) return;
+  const tipo = document.getElementById("finTipo").value;
+  const valor = parseFloat(document.getElementById("finValor").value);
+  const descricao = document.getElementById("finDescricao").value.trim();
+  if(!valor || valor<=0 || !descricao){ showToast("Preencha valor e descrição."); return; }
+  const mk = document.getElementById("contasMonthSelect").value || mesKey(new Date());
+  await addDoc(collection(db,"financas"), { tipo, valor, descricao, mes: mk, criadoEm: serverTimestamp() });
+  document.getElementById("finValor").value = "";
+  document.getElementById("finDescricao").value = "";
+  showToast("Lançamento registrado.");
+  renderContasTab();
+};
+
+/* =======================================================================
+   ADMIN
+   ======================================================================= */
+async function renderAdminTab(){
+  renderPendentesList();
+}
+
+async function renderPendentesList(){
+  const list = document.getElementById("pendentesList");
+  list.innerHTML = `<div class="empty-state">Carregando...</div>`;
+  const snap = await getDocs(query(collection(db,"usuarios"), where("status","==","pendente")));
+  if(snap.empty){ list.innerHTML = `<div class="empty-state">Nenhum cadastro pendente.</div>`; return; }
+  let html = "";
+  snap.forEach(d=>{
+    const u = d.data();
+    html += `<div class="list-card">
+      <div class="row1"><div class="title">${u.posto} ${u.nome}</div><span class="tag tag-pendente">Pendente</span></div>
+      <div class="meta">SARAM ${u.saram}</div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="btn btn-good btn-sm" style="flex:1;" data-act="aprovar" data-saram="${u.saram}">Aprovar</button>
+        <button class="btn btn-danger btn-sm" style="flex:1;" data-act="rejeitar" data-saram="${u.saram}">Rejeitar</button>
+      </div>
+    </div>`;
+  });
+  list.innerHTML = html;
+  list.querySelectorAll("button[data-act]").forEach(btn=>{
+    btn.onclick = async () => {
+      const saram = btn.dataset.saram;
+      if(btn.dataset.act==="aprovar"){
+        await updateDoc(doc(db,"usuarios",saram), { status:"aprovado" });
+        showToast("Usuário aprovado.");
+      }else{
+        await updateDoc(doc(db,"usuarios",saram), { status:"bloqueado" });
+        showToast("Cadastro rejeitado.");
+      }
+      renderPendentesList();
+    };
+  });
+}
+
+async function renderUsuariosList(){
+  const list = document.getElementById("usuariosList");
+  list.innerHTML = `<div class="empty-state">Carregando...</div>`;
+  const snap = await getDocs(collection(db,"usuarios"));
+  let html = "";
+  snap.forEach(d=>{
+    const u = d.data();
+    const tagClass = u.status==="aprovado" ? "tag-aprovado" : u.status==="bloqueado" ? "tag-bloqueado" : "tag-pendente";
+    html += `<div class="list-card">
+      <div class="row1">
+        <div class="title">${u.posto} ${u.nome} ${u.isAdmin?'<span class="tag tag-admin">Admin</span>':''}</div>
+        <span class="tag ${tagClass}">${u.status}</span>
+      </div>
+      <div class="meta">SARAM ${u.saram}</div>
+      <div class="btn-row" style="margin-top:10px;">
+        ${u.status==="bloqueado"
+          ? `<button class="btn btn-good btn-sm" style="flex:1;" data-act="desbloquear" data-saram="${u.saram}">Desbloquear</button>`
+          : `<button class="btn btn-danger btn-sm" style="flex:1;" data-act="bloquear" data-saram="${u.saram}">Bloquear</button>`}
+        <button class="btn btn-ghost btn-sm" style="flex:1;" data-act="remover" data-saram="${u.saram}">Remover</button>
+      </div>
+      <div class="btn-row" style="margin-top:8px;">
+        ${u.isAdmin
+          ? `<button class="btn btn-ghost btn-sm" style="flex:1;" data-act="remover-admin" data-saram="${u.saram}">Remover admin</button>`
+          : `<button class="btn btn-ghost btn-sm" style="flex:1;" data-act="tornar-admin" data-saram="${u.saram}">Tornar admin</button>`}
+      </div>
+    </div>`;
+  });
+  list.innerHTML = html || `<div class="empty-state">Nenhum usuário.</div>`;
+  list.querySelectorAll("button[data-act]").forEach(btn=>{
+    btn.onclick = async () => {
+      const saram = btn.dataset.saram;
+      if(btn.dataset.act==="bloquear") await updateDoc(doc(db,"usuarios",saram), { status:"bloqueado" });
+      else if(btn.dataset.act==="desbloquear") await updateDoc(doc(db,"usuarios",saram), { status:"aprovado" });
+      else if(btn.dataset.act==="remover"){
+        if(!confirm("Remover este usuário do sistema?")) return;
+        await deleteDoc(doc(db,"usuarios",saram));
+      }
+      else if(btn.dataset.act==="tornar-admin"){
+        if(!confirm("Conceder permissão de administrador a este usuário?")) return;
+        await updateDoc(doc(db,"usuarios",saram), { isAdmin:true });
+      }
+      else if(btn.dataset.act==="remover-admin"){
+        const adminsSnap = await getDocs(query(collection(db,"usuarios"), where("isAdmin","==",true)));
+        if(adminsSnap.size <= 1){ showToast("Não é possível remover o último administrador do sistema."); return; }
+        if(!confirm("Remover a permissão de administrador deste usuário?")) return;
+        await updateDoc(doc(db,"usuarios",saram), { isAdmin:false });
+      }
+      showToast("Atualizado.");
+      renderUsuariosList();
+    };
+  });
+}
+
+document.getElementById("btnAddUser").onclick = async () => {
+  const posto = document.getElementById("addPosto").value;
+  const nome = document.getElementById("addNome").value.trim();
+  const saram = document.getElementById("addSaram").value.trim();
+  const senha = document.getElementById("addSenha").value;
+  if(!nome || !saram || senha.length<6){ showToast("Preencha nome, SARAM e senha (mín. 6 caracteres)."); return; }
+
+  try{
+    // App secundário para não deslogar o admin ao criar a nova conta
+    const secondaryApp = initializeApp(firebaseConfig, "Secondary_"+Date.now());
+    const secondaryAuth = getAuth(secondaryApp);
+    await createUserWithEmailAndPassword(secondaryAuth, saramToEmail(saram), senha);
+    await signOut(secondaryAuth);
+    await setDoc(doc(db,"usuarios", saram), { saram, nome, posto, status:"aprovado", isAdmin:false, criadoEm: serverTimestamp() });
+    showToast("Usuário criado e aprovado.");
+    document.getElementById("addNome").value = "";
+    document.getElementById("addSaram").value = "";
+    document.getElementById("addSenha").value = "";
+    renderUsuariosList();
+  }catch(e){
+    console.error(e);
+    if(e.code === "auth/email-already-in-use") showToast("Essa matrícula/SARAM já possui cadastro.");
+    else showToast("Erro ao criar usuário.");
+  }
+};
+
+async function renderPagamentosList(){
+  const mk = document.getElementById("pagMonthSelect").value || mesKey(new Date());
+  document.getElementById("pagMonthSelect").value = mk;
+  const list = document.getElementById("pagamentosList");
+  list.innerHTML = `<div class="empty-state">Carregando...</div>`;
+  const usnap = await getDocs(query(collection(db,"usuarios"), where("status","==","aprovado")));
+  const pagSnap = await getDocs(query(collection(db,"pagamentos"), where("mes","==",mk)));
+  const pagosMap = {};
+  pagSnap.forEach(d=>{ pagosMap[d.data().saram] = d.data().pago; });
+
+  let html = "";
+  usnap.forEach(d=>{
+    const u = d.data();
+    const pago = !!pagosMap[u.saram];
+    html += `<div class="list-card row1" style="display:flex;justify-content:space-between;align-items:center;">
+      <div><div class="title">${u.posto} ${u.nome}</div><div class="meta">SARAM ${u.saram}</div></div>
+      <button class="btn btn-sm ${pago?"btn-good":"btn-danger"}" data-saram="${u.saram}" data-pago="${pago}">${pago?"Pago":"Pendente"}</button>
+    </div>`;
+  });
+  list.innerHTML = html || `<div class="empty-state">Nenhum usuário aprovado.</div>`;
+  list.querySelectorAll("button[data-saram]").forEach(btn=>{
+    btn.onclick = async () => {
+      const saram = btn.dataset.saram;
+      const novoPago = btn.dataset.pago !== "true";
+      await setDoc(doc(db,"pagamentos", `${saram}_${mk}`), { saram, mes: mk, pago: novoPago, atualizadoEm: serverTimestamp() });
+      renderPagamentosList();
+    };
+  });
+}
+
+async function renderAvisosAdminList(){
+  const list = document.getElementById("avisosAdminList");
+  list.innerHTML = `<div class="empty-state">Carregando...</div>`;
+  const snap = await getDocs(query(collection(db,"avisos"), orderBy("criadoEm","desc")));
+  if(snap.empty){ list.innerHTML = `<div class="empty-state">Nenhum aviso publicado.</div>`; return; }
+  let html = "";
+  snap.forEach(d=>{
+    const a = d.data();
+    html += `<div class="list-card">
+      <div class="title">${a.titulo}</div>
+      <div class="body">${a.texto}</div>
+      <button class="btn btn-danger btn-sm" style="margin-top:10px;width:100%;" data-id="${d.id}">Excluir aviso</button>
+    </div>`;
+  });
+  list.innerHTML = html;
+  list.querySelectorAll("button[data-id]").forEach(btn=>{
+    btn.onclick = async () => {
+      if(!confirm("Excluir este aviso?")) return;
+      await deleteDoc(doc(db,"avisos",btn.dataset.id));
+      showToast("Aviso excluído.");
+      renderAvisosAdminList();
+    };
+  });
+}
+
+document.getElementById("btnPublicarAviso").onclick = async () => {
+  const titulo = document.getElementById("avisoTitulo").value.trim();
+  const texto = document.getElementById("avisoTexto").value.trim();
+  if(!titulo || !texto){ showToast("Preencha título e mensagem."); return; }
+  await addDoc(collection(db,"avisos"), { titulo, texto, criadoEm: serverTimestamp() });
+  document.getElementById("avisoTitulo").value = "";
+  document.getElementById("avisoTexto").value = "";
+  showToast("Aviso publicado.");
+  renderAvisosAdminList();
+};
+
 </script>
 </body>
 </html>
