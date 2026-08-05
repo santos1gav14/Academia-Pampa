@@ -242,7 +242,7 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
       <!-- LOGIN -->
       <div id="formLogin">
         <div class="form-row">
-          <label>Matrícula / SARAM</label>
+          <label>SARAM</label>
           <input type="text" id="loginSaram" placeholder="Ex.: 1234567" inputmode="numeric">
         </div>
         <div class="form-row">
@@ -278,7 +278,7 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
           <input type="text" id="cadNome" placeholder="Ex.: Santos" maxlength="30">
         </div>
         <div class="form-row">
-          <label>Matrícula / SARAM</label>
+          <label>SARAM</label>
           <input type="text" id="cadSaram" placeholder="Ex.: 1234567" inputmode="numeric">
         </div>
         <div class="form-row">
@@ -416,7 +416,7 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
               </select>
             </div>
             <div class="form-row"><label>Nome</label><input type="text" id="addNome" maxlength="30"></div>
-            <div class="form-row"><label>Matrícula / SARAM</label><input type="text" id="addSaram" inputmode="numeric"></div>
+            <div class="form-row"><label>SARAM</label><input type="text" id="addSaram" inputmode="numeric"></div>
             <div class="form-row"><label>Senha temporária</label><input type="text" id="addSenha" placeholder="mín. 6 caracteres"></div>
             <button class="btn btn-primary" id="btnAddUser">Criar usuário aprovado</button>
           </div>
@@ -588,12 +588,12 @@ document.getElementById("btnLogin").onclick = async () => {
   hideAuthError();
   const saram = document.getElementById("loginSaram").value.trim();
   const senha = document.getElementById("loginSenha").value;
-  if(!saram || !senha){ showAuthError("Preencha matrícula/SARAM e senha."); return; }
+  if(!saram || !senha){ showAuthError("Preencha SARAM e senha."); return; }
   try{
     await signInWithEmailAndPassword(auth, saramToEmail(saram), senha);
   }catch(e){
     console.error(e);
-    showAuthError("Matrícula/SARAM ou senha incorretos.");
+    showAuthError("SARAM ou senha incorretos.");
   }
 };
 
@@ -604,7 +604,7 @@ document.getElementById("btnCadastro").onclick = async () => {
   const saram = document.getElementById("cadSaram").value.trim();
   const senha = document.getElementById("cadSenha").value;
   const senha2 = document.getElementById("cadSenha2").value;
-  if(!nome || !saram){ showAuthError("Preencha nome e matrícula/SARAM."); return; }
+  if(!nome || !saram){ showAuthError("Preencha nome e SARAM."); return; }
   if(senha.length < 6){ showAuthError("A senha precisa ter pelo menos 6 caracteres."); return; }
   if(senha !== senha2){ showAuthError("As senhas não coincidem."); return; }
 
@@ -630,7 +630,7 @@ document.getElementById("btnCadastro").onclick = async () => {
   }catch(e){
     console.error(e);
     if(e.code === "auth/email-already-in-use"){
-      showAuthError("Essa matrícula/SARAM já possui cadastro.");
+      showAuthError("Esse SARAM já possui cadastro.");
     }else{
       showAuthError("Erro ao cadastrar. Tente novamente.");
     }
@@ -915,12 +915,16 @@ async function renderMeusAcessos(){
   const list = document.getElementById("meusAcessosList");
   list.innerHTML = `<div class="empty-state">Carregando...</div>`;
   try{
-    const q = query(collection(db,"historico"), where("saram","==",currentUser.saram), orderBy("date","desc"));
+    // Sem orderBy aqui de propósito: evita exigir um índice composto no Firestore.
+    // A ordenação por data é feita no próprio app logo abaixo.
+    const q = query(collection(db,"historico"), where("saram","==",currentUser.saram));
     const snap = await getDocs(q);
     if(snap.empty){ list.innerHTML = `<div class="empty-state">Nenhum agendamento ainda.</div>`; return; }
+    const itens = [];
+    snap.forEach(d=>itens.push(d.data()));
+    itens.sort((a,b)=> (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
     let html = "";
-    snap.forEach(d=>{
-      const it = d.data();
+    itens.forEach(it=>{
       const cancelado = it.status === "cancelado";
       html += `<div class="list-card">
         <div class="row1">
@@ -1189,7 +1193,7 @@ document.getElementById("btnAddUser").onclick = async () => {
     renderUsuariosList();
   }catch(e){
     console.error(e);
-    if(e.code === "auth/email-already-in-use") showToast("Essa matrícula/SARAM já possui cadastro.");
+    if(e.code === "auth/email-already-in-use") showToast("Esse SARAM já possui cadastro.");
     else showToast("Erro ao criar usuário.");
   }
 };
