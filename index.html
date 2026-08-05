@@ -609,11 +609,14 @@ document.getElementById("btnCadastro").onclick = async () => {
   if(senha !== senha2){ showAuthError("As senhas não coincidem."); return; }
 
   try{
+    // A conta precisa existir (usuário autenticado) antes de consultar/gravar no Firestore,
+    // pois as regras de segurança exigem login para ler a coleção "usuarios".
+    const cred = await createUserWithEmailAndPassword(auth, saramToEmail(saram), senha);
+
     // Primeiro usuário do sistema vira admin aprovado automaticamente (bootstrap)
     const usuariosSnap = await getDocs(collection(db, "usuarios"));
     const isFirst = usuariosSnap.empty;
 
-    const cred = await createUserWithEmailAndPassword(auth, saramToEmail(saram), senha);
     await setDoc(doc(db, "usuarios", saram), {
       saram, nome, posto,
       status: isFirst ? "aprovado" : "pendente",
@@ -623,6 +626,7 @@ document.getElementById("btnCadastro").onclick = async () => {
     if(isFirst){
       showToast("Cadastro criado como administrador inicial.");
     }
+    handleAuthedUser(cred.user);
   }catch(e){
     console.error(e);
     if(e.code === "auth/email-already-in-use"){
@@ -643,7 +647,8 @@ function showScreen(id){
   });
 }
 
-onAuthStateChanged(auth, async (user) => {
+async function handleAuthedUser(user, retriesLeft){
+  if(retriesLeft === undefined) retriesLeft = 5;
   if(unsubscribeReservas){ unsubscribeReservas(); unsubscribeReservas = null; }
   if(!user){
     currentUser = null;
@@ -654,6 +659,11 @@ onAuthStateChanged(auth, async (user) => {
   const saram = user.email.replace(EMAIL_DOMAIN, "");
   const udoc = await getDoc(doc(db, "usuarios", saram));
   if(!udoc.exists()){
+    // Logo após o cadastro pode haver um pequeno atraso até o documento existir — tenta de novo algumas vezes.
+    if(retriesLeft > 0){
+      setTimeout(()=>handleAuthedUser(user, retriesLeft-1), 400);
+      return;
+    }
     showScreen("screenAuth");
     return;
   }
@@ -674,7 +684,9 @@ onAuthStateChanged(auth, async (user) => {
   const today = new Date(); today.setHours(0,0,0,0);
   selecionarDia(dateKey(today));
   buildMonthSelectors();
-});
+}
+
+onAuthStateChanged(auth, (user) => handleAuthedUser(user));
 
 /* =======================================================================
    NAVEGAÇÃO POR ABAS
