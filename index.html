@@ -343,6 +343,7 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
     <div id="tabMeusAcessos" class="hidden">
       <div class="section-title">Meus acessos</div>
       <div id="pagamentoStatusBox" class="card-list"></div>
+      <div id="pixBox" class="card-list hidden"></div>
       <div class="section-title">Histórico de agendamentos</div>
       <div class="card-list" id="meusAcessosList"></div>
     </div>
@@ -426,6 +427,23 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
       </div>
 
       <div id="adminPagamentos" class="hidden">
+        <div class="section-title" style="padding-top:2px;">Chave Pix da academia</div>
+        <div class="card-list">
+          <div class="list-card">
+            <div class="form-row"><label>Tipo de chave</label>
+              <select id="pixTipo">
+                <option value="CPF">CPF</option>
+                <option value="Telefone">Telefone</option>
+                <option value="E-mail">E-mail</option>
+                <option value="Aleatória">Aleatória</option>
+              </select>
+            </div>
+            <div class="form-row"><label>Chave Pix</label><input type="text" id="pixChave" placeholder="Ex.: 123.456.789-00"></div>
+            <div class="form-row"><label>Nome do titular</label><input type="text" id="pixTitular" placeholder="Ex.: Fundo da Academia do Pampa" maxlength="60"></div>
+            <button class="btn btn-primary" id="btnSalvarPix">Salvar chave Pix</button>
+          </div>
+        </div>
+        <div class="section-title">Controle de pagamentos</div>
         <div class="month-select-wrap"><select id="pagMonthSelect"></select></div>
         <div class="card-list" id="pagamentosList"></div>
       </div>
@@ -716,7 +734,7 @@ document.querySelectorAll(".subnav-btn").forEach(btn=>{
       document.getElementById("admin"+s).classList.toggle("hidden", s.toLowerCase()!==sub);
     });
     if(sub==="usuarios") renderUsuariosList();
-    if(sub==="pagamentos") renderPagamentosList();
+    if(sub==="pagamentos") { renderPagamentosList(); carregarPixConfig(); }
     if(sub==="avisos") renderAvisosAdminList();
   };
 });
@@ -911,6 +929,28 @@ async function renderMeusAcessos(){
       <span class="tag ${pago?"tag-pago":"tag-devendo"}">${pago?"Pago":"Pendente"}</span>
     </div>`;
   }catch(e){ console.error(e); box.innerHTML = ""; }
+
+  const pixBox = document.getElementById("pixBox");
+  try{
+    const pixDoc = await getDoc(doc(db, "config", "pix"));
+    if(pixDoc.exists() && pixDoc.data().chave){
+      const pix = pixDoc.data();
+      pixBox.classList.remove("hidden");
+      pixBox.innerHTML = `<div class="list-card">
+        <div class="row1"><div class="title">Pagar mensalidade via Pix</div><span class="tag tag-pendente">${pix.tipo}</span></div>
+        <div class="meta" style="margin-top:6px;">${pix.titular || ""}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;background:var(--panel-hi);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:10px;word-break:break-all;">${pix.chave}</div>
+        <button class="btn btn-primary btn-sm" id="btnCopiarPix" style="width:100%;margin-top:10px;">Copiar chave Pix</button>
+      </div>`;
+      document.getElementById("btnCopiarPix").onclick = async () => {
+        try{ await navigator.clipboard.writeText(pix.chave); showToast("Chave Pix copiada."); }
+        catch(e){ showToast("Não foi possível copiar automaticamente. Copie manualmente."); }
+      };
+    }else{
+      pixBox.classList.add("hidden");
+      pixBox.innerHTML = "";
+    }
+  }catch(e){ console.error(e); pixBox.classList.add("hidden"); }
 
   const list = document.getElementById("meusAcessosList");
   list.innerHTML = `<div class="empty-state">Carregando...</div>`;
@@ -1227,6 +1267,27 @@ async function renderPagamentosList(){
     };
   });
 }
+
+async function carregarPixConfig(){
+  try{
+    const pixDoc = await getDoc(doc(db, "config", "pix"));
+    if(pixDoc.exists()){
+      const pix = pixDoc.data();
+      document.getElementById("pixTipo").value = pix.tipo || "CPF";
+      document.getElementById("pixChave").value = pix.chave || "";
+      document.getElementById("pixTitular").value = pix.titular || "";
+    }
+  }catch(e){ console.error(e); }
+}
+
+document.getElementById("btnSalvarPix").onclick = async () => {
+  const tipo = document.getElementById("pixTipo").value;
+  const chave = document.getElementById("pixChave").value.trim();
+  const titular = document.getElementById("pixTitular").value.trim();
+  if(!chave){ showToast("Preencha a chave Pix."); return; }
+  await setDoc(doc(db, "config", "pix"), { tipo, chave, titular, atualizadoEm: serverTimestamp() });
+  showToast("Chave Pix salva.");
+};
 
 async function renderAvisosAdminList(){
   const list = document.getElementById("avisosAdminList");
