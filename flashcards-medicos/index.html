@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Flashcards com repetição espaçada para preparação de Revalida e ENARE.">
+<title>MedCards — Flashcards para Revalida &amp; ENARE</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+:root{
+  --bg:#F5F7F8;
+  --panel:#FFFFFF;
+  --panel-hi:#FFFFFF;
+  --border:#E1E7E9;
+  --text:#152023;
+  --text-dim:#5C7178;
+  --accent:#0E6E63;
+  --accent-dim:#E4F0EE;
+  --accent-ink:#FFFFFF;
+  --good:#1F8A5F;
+  --good-bg:#E7F5EE;
+  --danger:#C1503F;
+  --danger-bg:#FBEAE7;
+  --info:#2E6FA8;
+  --info-bg:#EAF2F9;
+  --radius:16px;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'IBM Plex Sans',sans-serif;
+  min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+}
+.hidden{display:none !important;}
+button{font-family:inherit;}
+
+/* ---------- LANDING ---------- */
+#view-landing{max-width:640px;margin:0 auto;padding:0 20px 60px;}
+.land-nav{display:flex;align-items:center;justify-content:space-between;padding:22px 0;}
+.brand{display:flex;align-items:center;gap:10px;}
+.brand-badge{width:38px;height:38px;border-radius:10px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:14px;}
+.brand-name{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:16px;}
+.btn{border:none;border-radius:10px;padding:11px 18px;font-size:14px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:active{transform:scale(0.98);}
+.btn-ghost{background:transparent;color:var(--accent);border:1px solid var(--accent);}
+.hero{padding:36px 0 20px;text-align:left;}
+.hero h1{font-size:32px;line-height:1.2;margin:0 0 14px;}
+.hero p{font-size:15.5px;color:var(--text-dim);line-height:1.5;margin:0 0 24px;max-width:480px;}
+.hero-cta{display:flex;gap:10px;flex-wrap:wrap;}
+.features{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:36px 0;}
+.feature{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px;}
+.feature .ic{font-size:20px;margin-bottom:8px;}
+.feature h3{margin:0 0 4px;font-size:14px;}
+.feature p{margin:0;font-size:12.5px;color:var(--text-dim);line-height:1.4;}
+.pricing-card{background:var(--panel);border:1px solid var(--border);border-radius:20px;padding:26px;margin:20px 0;}
+.pricing-card .plan{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px;}
+.pricing-card .price{font-size:34px;font-weight:700;margin:6px 0 2px;}
+.pricing-card .price small{font-size:14px;font-weight:400;color:var(--text-dim);}
+.pricing-card ul{margin:16px 0;padding:0;list-style:none;}
+.pricing-card li{font-size:13.5px;color:var(--text);padding:5px 0;display:flex;gap:8px;}
+.disclaimer{font-size:11.5px;color:var(--text-dim);margin-top:28px;line-height:1.5;}
+
+/* ---------- AUTH MODAL ---------- */
+.overlay{position:fixed;inset:0;background:rgba(10,20,22,0.5);display:none;align-items:center;justify-content:center;z-index:50;padding:20px;}
+.overlay.open{display:flex;}
+.sheet{width:100%;max-width:400px;background:var(--panel-hi);border-radius:20px;border:1px solid var(--border);padding:24px;max-height:90vh;overflow-y:auto;}
+.sheet-title{font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;}
+.sheet-sub{font-size:12.5px;color:var(--text-dim);margin-top:2px;margin-bottom:18px;}
+.form-row{margin-bottom:12px;}
+.form-row label{display:block;font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;font-family:'IBM Plex Mono',monospace;}
+input[type=text], input[type=email], input[type=password], textarea, select{
+  width:100%;background:#FBFCFC;border:1px solid var(--border);color:var(--text);
+  padding:11px 12px;border-radius:10px;font-size:14px;font-family:'IBM Plex Sans',sans-serif;
+}
+textarea{resize:vertical;min-height:70px;}
+.form-error{background:var(--danger-bg);color:var(--danger);border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:12px;}
+.form-note{background:var(--info-bg);color:var(--info);border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:12px;}
+.auth-switch{text-align:center;font-size:13px;color:var(--text-dim);margin-top:14px;}
+.auth-switch a{color:var(--accent);cursor:pointer;font-weight:600;text-decoration:none;}
+.sheet-close{float:right;background:none;border:none;color:var(--text-dim);font-size:18px;cursor:pointer;}
+
+/* ---------- APP SHELL ---------- */
+#view-app{width:100%;max-width:480px;margin:0 auto;min-height:100vh;background:var(--bg);padding-bottom:78px;}
+.topbar{padding:18px 20px 14px;border-bottom:1px solid var(--border);background:var(--panel);display:flex;align-items:center;justify-content:space-between;}
+.topbar .brand-name{font-size:15px;}
+.sub-pill{font-family:'IBM Plex Mono',monospace;font-size:10.5px;padding:4px 9px;border-radius:20px;border:1px solid var(--border);color:var(--text-dim);}
+.sub-pill.active{background:var(--good-bg);color:var(--good);border-color:transparent;}
+.sub-pill.locked{background:var(--danger-bg);color:var(--danger);border-color:transparent;}
+
+.screen{padding:18px 20px 8px;}
+.screen h2{font-size:18px;margin:0 0 14px;}
+.deck-list{display:flex;flex-direction:column;gap:10px;}
+.deck-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:15px 16px;}
+.deck-card .dtitle{font-weight:600;font-size:14.5px;display:flex;align-items:center;gap:6px;}
+.deck-card .dspec{font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:0.4px;font-family:'IBM Plex Mono',monospace;margin-top:2px;}
+.deck-card .ddesc{font-size:13px;color:var(--text-dim);margin:8px 0 12px;line-height:1.4;}
+.deck-card .drow{display:flex;justify-content:space-between;align-items:center;gap:10px;}
+.badge-free{font-size:10px;background:var(--good-bg);color:var(--good);padding:2px 8px;border-radius:10px;font-weight:600;}
+.badge-lock{font-size:10px;background:var(--danger-bg);color:var(--danger);padding:2px 8px;border-radius:10px;font-weight:600;}
+.btn-sm{padding:8px 14px;border-radius:8px;font-size:12.5px;}
+.empty{font-size:13px;color:var(--text-dim);padding:30px 0;text-align:center;border:1px dashed var(--border);border-radius:12px;}
+
+/* ---------- STUDY ---------- */
+.study-wrap{padding:18px 20px;}
+.study-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+.study-top .back{color:var(--text-dim);font-size:13px;cursor:pointer;}
+.study-progress{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text-dim);}
+.card-flip{background:var(--panel);border:1px solid var(--border);border-radius:20px;min-height:260px;display:flex;align-items:center;justify-content:center;padding:26px;text-align:center;cursor:pointer;box-shadow:0 2px 10px rgba(15,25,28,0.05);}
+.card-flip .ctext{font-size:16.5px;line-height:1.5;}
+.card-hint{text-align:center;font-size:12px;color:var(--text-dim);margin-top:10px;}
+.study-actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:16px;}
+.study-actions button{padding:13px 6px;border-radius:12px;font-size:12.5px;font-weight:600;border:none;}
+.btn-again{background:var(--danger-bg);color:var(--danger);}
+.btn-good{background:var(--info-bg);color:var(--info);}
+.btn-easy{background:var(--good-bg);color:var(--good);}
+.study-done{text-align:center;padding:50px 20px;}
+.study-done .ic{font-size:40px;margin-bottom:10px;}
+
+/* ---------- ACCOUNT ---------- */
+.acct-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:14px;}
+.acct-card h3{margin:0 0 6px;font-size:14.5px;}
+.acct-card p{margin:0;font-size:13px;color:var(--text-dim);line-height:1.5;}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+.stat-box{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px;text-align:center;}
+.stat-box .num{font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:700;color:var(--accent);}
+.stat-box .lbl{font-size:11px;color:var(--text-dim);margin-top:2px;}
+
+/* ---------- ADMIN ---------- */
+.admin-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px;}
+.card-mini{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;background:#FBFCFC;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;}
+.card-mini .txt{font-size:12.5px;line-height:1.4;}
+.card-mini .txt b{display:block;font-size:12px;}
+.rm-btn{background:var(--danger);color:#fff;border:none;border-radius:7px;padding:6px 10px;font-size:11px;cursor:pointer;flex-shrink:0;}
+label.chk{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);margin-bottom:12px;}
+
+/* ---------- BOTTOM NAV ---------- */
+.bottom-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:var(--panel);border-top:1px solid var(--border);display:flex;z-index:40;padding:6px 4px calc(6px + env(safe-area-inset-bottom));}
+.nav-btn{flex:1;background:none;border:none;color:var(--text-dim);display:flex;flex-direction:column;align-items:center;gap:3px;font-size:9.5px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.3px;padding:6px 2px;cursor:pointer;text-transform:uppercase;}
+.nav-btn .ic{font-size:17px;}
+.nav-btn.active{color:var(--accent);}
+
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;z-index:60;max-width:90%;text-align:center;}
+</style>
+</head>
+<body>
+
+<!-- ============ LANDING ============ -->
+<div id="view-landing">
+  <div class="land-nav">
+    <div class="brand"><div class="brand-badge">MC</div><div class="brand-name">MedCards</div></div>
+    <button class="btn btn-ghost" onclick="openAuth('login')">Entrar</button>
+  </div>
+
+  <div class="hero">
+    <h1>Flashcards com repetição espaçada para Revalida e ENARE</h1>
+    <p>Revise os temas que mais caem, no seu ritmo, com um algoritmo que mostra cada cartão exatamente quando você está prestes a esquecê-lo.</p>
+    <div class="hero-cta">
+      <button class="btn btn-primary" onclick="openAuth('signup')">Criar conta grátis</button>
+      <button class="btn btn-ghost" onclick="openAuth('login')">Já tenho conta</button>
+    </div>
+  </div>
+
+  <div class="features">
+    <div class="feature"><div class="ic">🧠</div><h3>Repetição espaçada</h3><p>Algoritmo tipo SM-2: menos tempo revisando o que você já sabe.</p></div>
+    <div class="feature"><div class="ic">🩺</div><h3>Foco em provas</h3><p>Baralhos organizados por especialidade, direto ao ponto.</p></div>
+    <div class="feature"><div class="ic">📈</div><h3>Progresso real</h3><p>Acompanhe cartões revisados e o que falta estudar hoje.</p></div>
+    <div class="feature"><div class="ic">🔒</div><h3>Sua conta, seus dados</h3><p>Autenticação segura e conteúdo liberado só para assinantes.</p></div>
+  </div>
+
+  <div class="pricing-card">
+    <div class="plan">Plano único</div>
+    <div class="price" id="price-display">R$ 49,90 <small>/ mês</small></div>
+    <ul>
+      <li>✅ Acesso a todos os baralhos premium</li>
+      <li>✅ Repetição espaçada ilimitada</li>
+      <li>✅ Estatísticas de progresso</li>
+      <li>✅ Cancele quando quiser</li>
+    </ul>
+    <button class="btn btn-primary" style="width:100%" onclick="openAuth('signup')">Assinar agora</button>
+  </div>
+
+  <p class="disclaimer">MedCards é um material de apoio complementar aos estudos e não possui vínculo oficial com bancas examinadoras. Pagamentos processados com segurança pelo Mercado Pago.</p>
+</div>
+
+<!-- ============ AUTH MODAL ============ -->
+<div class="overlay" id="auth-overlay">
+  <div class="sheet">
+    <button class="sheet-close" onclick="closeAuth()">✕</button>
+    <div class="sheet-title" id="auth-title">Entrar</div>
+    <div class="sheet-sub" id="auth-sub">Acesse sua conta para continuar estudando.</div>
+    <div id="auth-error" class="form-error hidden"></div>
+    <div id="auth-note" class="form-note hidden"></div>
+
+    <div class="form-row hidden" id="row-fullname">
+      <label>Nome completo</label>
+      <input type="text" id="in-fullname" placeholder="Seu nome">
+    </div>
+    <div class="form-row">
+      <label>E-mail</label>
+      <input type="email" id="in-email" placeholder="voce@exemplo.com">
+    </div>
+    <div class="form-row">
+      <label>Senha</label>
+      <input type="password" id="in-password" placeholder="Mínimo 6 caracteres">
+    </div>
+
+    <button class="btn btn-primary" style="width:100%" id="auth-submit" onclick="submitAuth()">Entrar</button>
+    <div class="auth-switch" id="auth-switch"></div>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="view-app" class="hidden">
+  <div class="topbar">
+    <div class="brand"><div class="brand-badge">MC</div><div class="brand-name">MedCards</div></div>
+    <span class="sub-pill" id="sub-pill">verificando…</span>
+  </div>
+
+  <!-- DECKS -->
+  <div class="screen" id="screen-decks">
+    <h2>Baralhos</h2>
+    <div class="deck-list" id="deck-list"><div class="empty">Carregando baralhos…</div></div>
+  </div>
+
+  <!-- STUDY -->
+  <div class="screen hidden" id="screen-study"></div>
+
+  <!-- PROGRESS -->
+  <div class="screen hidden" id="screen-progress">
+    <h2>Progresso</h2>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="num" id="stat-reviewed">0</div><div class="lbl">Cartões revisados</div></div>
+      <div class="stat-box"><div class="num" id="stat-due">0</div><div class="lbl">Para hoje</div></div>
+    </div>
+  </div>
+
+  <!-- ACCOUNT -->
+  <div class="screen hidden" id="screen-account">
+    <h2>Conta</h2>
+    <div class="acct-card">
+      <h3 id="acct-name">—</h3>
+      <p id="acct-email">—</p>
+    </div>
+    <div class="acct-card" id="acct-sub-card">
+      <h3>Assinatura</h3>
+      <p id="acct-sub-status">Verificando status…</p>
+      <div style="margin-top:12px;" id="acct-sub-action"></div>
+    </div>
+    <button class="btn btn-ghost" style="width:100%" onclick="signOut()">Sair da conta</button>
+  </div>
+
+  <!-- ADMIN -->
+  <div class="screen hidden" id="screen-admin">
+    <h2>Gerenciar conteúdo</h2>
+    <div class="admin-card">
+      <h3 style="margin:0 0 10px;font-size:14px;">Novo baralho</h3>
+      <div class="form-row"><label>Título</label><input type="text" id="ad-deck-title"></div>
+      <div class="form-row"><label>Especialidade</label><input type="text" id="ad-deck-spec"></div>
+      <div class="form-row"><label>Descrição</label><textarea id="ad-deck-desc"></textarea></div>
+      <label class="chk"><input type="checkbox" id="ad-deck-premium" checked> Conteúdo premium (só assinantes)</label>
+      <button class="btn btn-primary btn-sm" onclick="adminCreateDeck()">Criar baralho</button>
+    </div>
+    <div id="admin-deck-list"></div>
+  </div>
+
+  <div class="bottom-nav">
+    <button class="nav-btn active" data-screen="decks" onclick="goScreen('decks')"><span class="ic">🗂️</span>Baralhos</button>
+    <button class="nav-btn" data-screen="progress" onclick="goScreen('progress')"><span class="ic">📈</span>Progresso</button>
+    <button class="nav-btn" data-screen="account" onclick="goScreen('account')"><span class="ic">👤</span>Conta</button>
+    <button class="nav-btn hidden" id="nav-admin" data-screen="admin" onclick="goScreen('admin')"><span class="ic">⚙️</span>Admin</button>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script type="module">
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const cfg = window.APP_CONFIG;
+const supabase = createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+window.supabase = supabase;
+document.getElementById('price-display').innerHTML = cfg.PRICE_LABEL.replace('/', '<small>/') + '</small>';
+
+// ---------- helpers ----------
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function toast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3200);
+}
+window.toast = toast;
+
+let state = { user: null, profile: null, subscription: null, deckCache: [] };
+
+// ---------- auth modal ----------
+let authMode = 'login';
+window.openAuth = function(mode) {
+  authMode = mode;
+  document.getElementById('auth-error').classList.add('hidden');
+  document.getElementById('auth-note').classList.add('hidden');
+  document.getElementById('in-email').value = '';
+  document.getElementById('in-password').value = '';
+  document.getElementById('in-fullname').value = '';
+  renderAuthMode();
+  document.getElementById('auth-overlay').classList.add('open');
+};
+window.closeAuth = function() {
+  document.getElementById('auth-overlay').classList.remove('open');
+};
+function renderAuthMode() {
+  const isSignup = authMode === 'signup';
+  document.getElementById('auth-title').textContent = isSignup ? 'Criar conta' : 'Entrar';
+  document.getElementById('auth-sub').textContent = isSignup
+    ? 'Leva menos de um minuto.'
+    : 'Acesse sua conta para continuar estudando.';
+  document.getElementById('row-fullname').classList.toggle('hidden', !isSignup);
+  document.getElementById('auth-submit').textContent = isSignup ? 'Criar conta' : 'Entrar';
+  document.getElementById('auth-switch').innerHTML = isSignup
+    ? 'Já tem conta? <a onclick="switchAuth()">Entrar</a>'
+    : 'Não tem conta? <a onclick="switchAuth()">Criar agora</a>';
+}
+window.switchAuth = function() {
+  authMode = authMode === 'signup' ? 'login' : 'signup';
+  renderAuthMode();
+};
+window.submitAuth = async function() {
+  const email = document.getElementById('in-email').value.trim();
+  const password = document.getElementById('in-password').value;
+  const fullName = document.getElementById('in-fullname').value.trim();
+  const errBox = document.getElementById('auth-error');
+  const noteBox = document.getElementById('auth-note');
+  errBox.classList.add('hidden');
+  noteBox.classList.add('hidden');
+
+  if (!email || !password) {
+    errBox.textContent = 'Preencha e-mail e senha.';
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  if (authMode === 'signup') {
+    const { error } = await supabase.auth.signUp({
+      email, password,
+      options: { data: { full_name: fullName } },
+    });
+    if (error) {
+      errBox.textContent = error.message;
+      errBox.classList.remove('hidden');
+      return;
+    }
+    noteBox.textContent = 'Conta criada! Verifique seu e-mail para confirmar o acesso.';
+    noteBox.classList.remove('hidden');
+  } else {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      errBox.textContent = 'E-mail ou senha inválidos.';
+      errBox.classList.remove('hidden');
+      return;
+    }
+    closeAuth();
+  }
+};
+window.signOut = async function() {
+  await supabase.auth.signOut();
+};
+
+// ---------- session bootstrap ----------
+supabase.auth.onAuthStateChange((_event, session) => {
+  handleSession(session);
+});
+
+async function handleSession(session) {
+  if (!session) {
+    state.user = null;
+    document.getElementById('view-landing').classList.remove('hidden');
+    document.getElementById('view-app').classList.add('hidden');
+    return;
+  }
+  state.user = session.user;
+  document.getElementById('view-landing').classList.add('hidden');
+  document.getElementById('view-app').classList.remove('hidden');
+
+  await loadProfile();
+  await loadSubscription();
+  goScreen('decks');
+
+  const params = new URLSearchParams(location.search);
+  if (params.get('sub') === 'success') {
+    toast('Assinatura em processamento — pode levar alguns minutos para confirmar.');
+    history.replaceState({}, '', location.pathname);
+  }
+}
+
+async function loadProfile() {
+  const { data } = await supabase.from('profiles').select('*').eq('id', state.user.id).maybeSingle();
+  state.profile = data;
+  document.getElementById('acct-name').textContent = data?.full_name || 'Minha conta';
+  document.getElementById('acct-email').textContent = state.user.email;
+  document.getElementById('nav-admin').classList.toggle('hidden', !data?.is_admin);
+}
+
+async function loadSubscription() {
+  const { data } = await supabase.from('subscriptions').select('*').eq('user_id', state.user.id).maybeSingle();
+  state.subscription = data;
+  const pill = document.getElementById('sub-pill');
+  const active = data && data.status === 'active';
+  pill.textContent = active ? 'Assinatura ativa' : 'Sem assinatura';
+  pill.className = 'sub-pill ' + (active ? 'active' : 'locked');
+  renderAccountSub();
+}
+
+function hasActiveSub() {
+  return !!(state.subscription && state.subscription.status === 'active');
+}
+
+function renderAccountSub() {
+  const statusEl = document.getElementById('acct-sub-status');
+  const actionEl = document.getElementById('acct-sub-action');
+  if (hasActiveSub()) {
+    const end = state.subscription.current_period_end
+      ? new Date(state.subscription.current_period_end).toLocaleDateString('pt-BR')
+      : '—';
+    statusEl.textContent = `Ativa. Próxima cobrança em ${end}.`;
+    actionEl.innerHTML = '';
+  } else if (state.subscription && state.subscription.status === 'pending') {
+    statusEl.textContent = 'Pagamento em processamento pelo Mercado Pago.';
+    actionEl.innerHTML = '';
+  } else {
+    statusEl.textContent = 'Você ainda não tem uma assinatura ativa.';
+    actionEl.innerHTML = '<button class="btn btn-primary btn-sm" onclick="startCheckout()">Assinar agora</button>';
+  }
+}
+
+window.startCheckout = async function() {
+  toast('Redirecionando para o Mercado Pago…');
+  const { data, error } = await supabase.functions.invoke('mp-create-preapproval');
+  if (error || !data?.init_point) {
+    toast('Não foi possível iniciar o checkout. Tente novamente.');
+    return;
+  }
+  location.href = data.init_point;
+};
+
+// ---------- navigation ----------
+window.goScreen = function(name) {
+  ['decks', 'study', 'progress', 'account', 'admin'].forEach(s => {
+    document.getElementById('screen-' + s).classList.toggle('hidden', s !== name);
+  });
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.screen === name));
+  if (name === 'decks') loadDecks();
+  if (name === 'progress') loadProgress();
+  if (name === 'admin') loadAdmin();
+};
+
+// ---------- decks ----------
+async function loadDecks() {
+  const { data, error } = await supabase.from('decks').select('*').order('created_at', { ascending: true });
+  const list = document.getElementById('deck-list');
+  if (error || !data || data.length === 0) {
+    list.innerHTML = '<div class="empty">Nenhum baralho disponível ainda.</div>';
+    return;
+  }
+  state.deckCache = data;
+  list.innerHTML = data.map(d => {
+    const locked = d.is_premium && !hasActiveSub();
+    return `<div class="deck-card">
+      <div class="dtitle">${esc(d.title)}</div>
+      <div class="dspec">${esc(d.specialty || '')}</div>
+      <div class="ddesc">${esc(d.description || '')}</div>
+      <div class="drow">
+        <span class="${d.is_premium ? 'badge-lock' : 'badge-free'}">${d.is_premium ? '🔒 Premium' : 'Grátis'}</span>
+        ${locked
+          ? '<button class="btn btn-ghost btn-sm" onclick="goScreen(\'account\')">Assinar para desbloquear</button>'
+          : `<button class="btn btn-primary btn-sm" onclick="startStudy('${d.id}')">Estudar</button>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ---------- study (SM-2 spaced repetition) ----------
+let studyQueue = [];
+let studyIndex = 0;
+let studyFlipped = false;
+
+function sm2(review, quality) {
+  let ef = review.ease_factor ?? 2.5;
+  let interval = review.interval_days ?? 0;
+  let reps = review.repetitions ?? 0;
+
+  if (quality < 3) {
+    reps = 0;
+    interval = 1;
+  } else {
+    if (reps === 0) interval = 1;
+    else if (reps === 1) interval = 6;
+    else interval = Math.round(interval * ef);
+    reps += 1;
+  }
+  ef = Math.max(1.3, ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
+
+  const due = new Date();
+  due.setDate(due.getDate() + interval);
+  return {
+    ease_factor: ef,
+    interval_days: interval,
+    repetitions: reps,
+    due_date: due.toISOString().slice(0, 10),
+    last_reviewed_at: new Date().toISOString(),
+  };
+}
+
+window.startStudy = async function(deckId) {
+  const { data: cards, error } = await supabase.from('flashcards').select('*').eq('deck_id', deckId);
+  if (error || !cards || cards.length === 0) {
+    toast('Este baralho ainda não tem cartões.');
+    return;
+  }
+  const { data: reviews } = await supabase.from('reviews').select('*').eq('user_id', state.user.id)
+    .in('flashcard_id', cards.map(c => c.id));
+  const reviewMap = Object.fromEntries((reviews || []).map(r => [r.flashcard_id, r]));
+
+  const today = new Date().toISOString().slice(0, 10);
+  studyQueue = cards
+    .map(c => ({ card: c, review: reviewMap[c.id] || null }))
+    .filter(x => !x.review || x.review.due_date <= today);
+
+  if (studyQueue.length === 0) {
+    toast('Nenhum cartão pendente neste baralho hoje. 🎉');
+    return;
+  }
+  studyIndex = 0;
+  goScreen('study');
+  renderStudyCard();
+};
+
+function renderStudyCard() {
+  const el = document.getElementById('screen-study');
+  if (studyIndex >= studyQueue.length) {
+    el.innerHTML = `<div class="study-done"><div class="ic">🎉</div><h2>Sessão concluída!</h2>
+      <p style="color:var(--text-dim);font-size:13.5px;">Você revisou todos os cartões pendentes deste baralho.</p>
+      <button class="btn btn-primary" style="margin-top:16px;" onclick="goScreen('decks')">Voltar aos baralhos</button></div>`;
+    return;
+  }
+  studyFlipped = false;
+  const item = studyQueue[studyIndex];
+  el.innerHTML = `
+    <div class="study-top">
+      <span class="back" onclick="goScreen('decks')">← Sair</span>
+      <span class="study-progress">${studyIndex + 1} / ${studyQueue.length}</span>
+    </div>
+    <div class="card-flip" id="flip-card" onclick="flipCard()">
+      <div class="ctext" id="flip-text">${esc(item.card.front)}</div>
+    </div>
+    <div class="card-hint" id="flip-hint">Toque no cartão para ver a resposta</div>
+    <div class="study-actions hidden" id="study-actions">
+      <button class="btn-again" onclick="answerCard(2)">Errei</button>
+      <button class="btn-good" onclick="answerCard(4)">Bom</button>
+      <button class="btn-easy" onclick="answerCard(5)">Fácil</button>
+    </div>`;
+}
+
+window.flipCard = function() {
+  if (studyFlipped) return;
+  studyFlipped = true;
+  const item = studyQueue[studyIndex];
+  document.getElementById('flip-text').textContent = item.card.back;
+  document.getElementById('flip-hint').textContent = '';
+  document.getElementById('study-actions').classList.remove('hidden');
+};
+
+window.answerCard = async function(quality) {
+  const item = studyQueue[studyIndex];
+  const base = item.review || { ease_factor: 2.5, interval_days: 0, repetitions: 0 };
+  const updated = sm2(base, quality);
+  await supabase.from('reviews').upsert({
+    user_id: state.user.id,
+    flashcard_id: item.card.id,
+    ...updated,
+  }, { onConflict: 'user_id,flashcard_id' });
+  studyIndex += 1;
+  renderStudyCard();
+};
+
+// ---------- progress ----------
+async function loadProgress() {
+  const { count: reviewed } = await supabase.from('reviews').select('*', { count: 'exact', head: true }).eq('user_id', state.user.id);
+  const today = new Date().toISOString().slice(0, 10);
+  const { count: due } = await supabase.from('reviews').select('*', { count: 'exact', head: true })
+    .eq('user_id', state.user.id).lte('due_date', today);
+  document.getElementById('stat-reviewed').textContent = reviewed ?? 0;
+  document.getElementById('stat-due').textContent = due ?? 0;
+}
+
+// ---------- admin ----------
+window.adminCreateDeck = async function() {
+  const title = document.getElementById('ad-deck-title').value.trim();
+  const specialty = document.getElementById('ad-deck-spec').value.trim();
+  const description = document.getElementById('ad-deck-desc').value.trim();
+  const is_premium = document.getElementById('ad-deck-premium').checked;
+  if (!title) { toast('Dê um título ao baralho.'); return; }
+  const { error } = await supabase.from('decks').insert({ title, specialty, description, is_premium, created_by: state.user.id });
+  if (error) { toast('Erro ao criar baralho.'); return; }
+  document.getElementById('ad-deck-title').value = '';
+  document.getElementById('ad-deck-spec').value = '';
+  document.getElementById('ad-deck-desc').value = '';
+  loadAdmin();
+};
+
+async function loadAdmin() {
+  const { data: decks } = await supabase.from('decks').select('*').order('created_at', { ascending: true });
+  const wrap = document.getElementById('admin-deck-list');
+  if (!decks || decks.length === 0) { wrap.innerHTML = ''; return; }
+
+  const cardsByDeck = {};
+  for (const d of decks) {
+    const { data: cards } = await supabase.from('flashcards').select('*').eq('deck_id', d.id);
+    cardsByDeck[d.id] = cards || [];
+  }
+
+  wrap.innerHTML = decks.map(d => `
+    <div class="admin-card">
+      <h3 style="margin:0 0 4px;font-size:14px;">${esc(d.title)} ${d.is_premium ? '🔒' : '🆓'}</h3>
+      <p style="font-size:12px;color:var(--text-dim);margin:0 0 12px;">${cardsByDeck[d.id].length} cartão(ões)</p>
+      ${cardsByDeck[d.id].map(c => `
+        <div class="card-mini">
+          <div class="txt"><b>${esc(c.front)}</b>${esc(c.back)}</div>
+          <button class="rm-btn" onclick="adminDeleteCard('${c.id}')">Excluir</button>
+        </div>`).join('')}
+      <div class="form-row"><label>Nova pergunta (frente)</label><textarea id="new-front-${d.id}"></textarea></div>
+      <div class="form-row"><label>Resposta (verso)</label><textarea id="new-back-${d.id}"></textarea></div>
+      <button class="btn btn-primary btn-sm" onclick="adminAddCard('${d.id}')">Adicionar cartão</button>
+    </div>`).join('');
+}
+
+window.adminAddCard = async function(deckId) {
+  const front = document.getElementById(`new-front-${deckId}`).value.trim();
+  const back = document.getElementById(`new-back-${deckId}`).value.trim();
+  if (!front || !back) { toast('Preencha pergunta e resposta.'); return; }
+  const { error } = await supabase.from('flashcards').insert({ deck_id: deckId, front, back });
+  if (error) { toast('Erro ao adicionar cartão.'); return; }
+  loadAdmin();
+};
+
+window.adminDeleteCard = async function(cardId) {
+  await supabase.from('flashcards').delete().eq('id', cardId);
+  loadAdmin();
+};
+
+// ---------- init ----------
+supabase.auth.getSession().then(({ data }) => handleSession(data.session));
+</script>
+</body>
+</html>
