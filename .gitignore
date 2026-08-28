@@ -1,0 +1,7 @@
+# Chaves de conta de serviço do Firebase (nunca comitar — dão acesso total ao banco)
+service-account.json
+migrations/service-account.json
+
+# Node
+node_modules/
+npm-debug.log*

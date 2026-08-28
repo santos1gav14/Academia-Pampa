@@ -22,6 +22,16 @@ rules_version = '2';
 //   3. Edite os campos manualmente: status = "aprovado", isAdmin = true.
 // Depois disso, essa pessoa já consegue aprovar os demais e conceder admin
 // a outras pessoas direto pelo app.
+//
+// ATENÇÃO — MIGRAÇÃO OBRIGATÓRIA ANTES DE PUBLICAR ESTA VERSÃO
+// A partir desta versão, as reservas de turno moraram de um array "lista"
+// dentro do documento do turno para uma subcoleção "reservas" (um documento
+// por pessoa) — é o que permite a regra abaixo impedir que alguém edite a
+// reserva de outra pessoa. Se você já tem reservas reais no ar no formato
+// antigo, rode migrations/migrar-reservas-subcolecao.js ANTES de publicar
+// estas regras e o novo index.html, senão essas reservas somem da tela
+// (o campo antigo "lista" continua no banco, só o app novo não lê mais
+// dele). Veja o cabeçalho daquele script para o passo a passo.
 // =============================================================================
 
 service cloud.firestore {
@@ -63,19 +73,40 @@ service cloud.firestore {
     }
 
     // ---- reservas_academia/{dateKey_turno} ----
-    // Vagas e listas de reserva de cada turno. Qualquer aprovado pode ler
-    // (para ver disponibilidade) e reservar/cancelar; a elegibilidade entre
-    // vaga geral e vaga exclusiva de piloto é validada de novo no app dentro
-    // da transação do Firestore. Não dá para validar aqui, com regras, que
-    // cada edição da lista mexeu só na própria entrada (o Firestore Rules
-    // não tem como iterar arrays de mapas) — o app já usa transação para
-    // evitar duas pessoas ocupando a mesma vaga ao mesmo tempo, e o risco
-    // residual (um aprovado adulterar a entrada de outro aprovado na lista)
-    // é aceitável para um grupo fechado de usuários já aprovados.
-    match /reservas_academia/{docId} {
+    // Documento "pai" de cada turno: só guarda date/turno/count (a contagem
+    // de reservas). count só pode se mover em passos de exatamente ±1 por
+    // escrita, e nenhum outro campo pode ser tocado — fecha a possibilidade
+    // de alguém forjar uma contagem qualquer para burlar a capacidade.
+    // Quem está reservado em cada turno vive na subcoleção "reservas" logo
+    // abaixo, um documento por pessoa.
+    match /reservas_academia/{turnoId} {
       allow read: if isApproved();
-      allow create, update: if isApproved();
+      allow create: if isApproved()
+        && request.resource.data.keys().hasOnly(['date','turno','count'])
+        && request.resource.data.count == 1;
+      allow update: if isApproved()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['count'])
+        && request.resource.data.count is int
+        && request.resource.data.count >= 0
+        && (request.resource.data.count == resource.data.count + 1
+            || request.resource.data.count == resource.data.count - 1);
       allow delete: if isAdmin();
+
+      // ---- reservas_academia/{dateKey_turno}/reservas/{saram} ----
+      // Uma reserva = um documento, dono é quem tem o SARAM do ID do
+      // documento. Só o próprio dono cria a própria reserva (não dá para
+      // criar reserva em nome de outra pessoa); só o dono ou um admin
+      // cancela (apaga); ninguém pode editar uma reserva já existente —
+      // isso é o que fecha a brecha de alguém adulterar o cadastro de
+      // outra pessoa dentro da lista do turno.
+      match /reservas/{saram} {
+        allow read: if isApproved();
+        allow create: if isApproved()
+          && saram == mySaram()
+          && request.resource.data.saram == saram;
+        allow delete: if isApproved() && (saram == mySaram() || isAdmin());
+        allow update: if false;
+      }
     }
 
     // ---- historico/{saram_dateKey_turno} ----

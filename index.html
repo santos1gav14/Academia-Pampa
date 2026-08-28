@@ -613,7 +613,7 @@ let unreadAvisos = [];
 let selectedDateKey = null;
 let selectedTurno = null;
 let rosterMap = {};
-let unsubscribeReservas = null;
+let unsubscribeReservas = []; // um listener por turno (ver assinarDia)
 
 /* =======================================================================
    AUTENTICAÇÃO
@@ -700,7 +700,8 @@ function showScreen(id){
 
 async function handleAuthedUser(user, retriesLeft){
   if(retriesLeft === undefined) retriesLeft = 5;
-  if(unsubscribeReservas){ unsubscribeReservas(); unsubscribeReservas = null; }
+  unsubscribeReservas.forEach(fn=>fn());
+  unsubscribeReservas = [];
   if(!user){
     currentUser = null;
     showScreen("screenAuth");
@@ -855,17 +856,23 @@ function selecionarDia(k){
 
 function assinarDia(){
   if(!firebaseOk) return;
-  if(unsubscribeReservas) unsubscribeReservas();
-  const q = query(collection(db, COLLECTION), where("date", "==", selectedDateKey));
-  unsubscribeReservas = onSnapshot(q, (snap) => {
-    const novo = {};
-    snap.forEach(docSnap => {
-      const data = docSnap.data();
-      novo[data.turno] = data.lista || [];
-    });
-    rosterMap = novo;
-    renderTurnoList();
-  }, (err) => { console.error(err); showToast("Erro ao conectar com o banco de dados."); });
+  unsubscribeReservas.forEach(fn=>fn());
+  unsubscribeReservas = [];
+  // Cada turno tem sua própria subcoleção "reservas" (um documento por
+  // pessoa, dono do próprio documento) em vez de um array "lista" só —
+  // isso é o que permite às regras do Firestore impedir que alguém
+  // edite a reserva de outra pessoa (ver firestore.rules).
+  TURNOS.forEach(turno => {
+    const ref = collection(db, COLLECTION, docId(selectedDateKey, turno), "reservas");
+    const unsub = onSnapshot(ref, (snap) => {
+      const lista = [];
+      snap.forEach(docSnap => lista.push(docSnap.data()));
+      lista.sort((a,b) => (a.ts||0) - (b.ts||0));
+      rosterMap[turno] = lista;
+      renderTurnoList();
+    }, (err) => { console.error(err); showToast("Erro ao conectar com o banco de dados."); });
+    unsubscribeReservas.push(unsub);
+  });
 }
 
 function openSheet(turno){
@@ -927,17 +934,22 @@ async function reservar(){
     openAvisoGate();
     return;
   }
-  const ref = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno));
+  const parentRef = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno));
+  const myResRef = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno), "reservas", currentUser.saram);
   try{
     await runTransaction(db, async (tx) => {
-      const snap = await tx.get(ref);
-      const lista = snap.exists() ? (snap.data().lista || []) : [];
+      const parentSnap = await tx.get(parentRef);
+      const myResSnap = await tx.get(myResRef);
+      const count = parentSnap.exists() ? (parentSnap.data().count || 0) : 0;
       const total = totalVagas();
-      if(lista.length >= total) throw new Error("ESGOTADO");
-      if(lista.length >= VAGAS_GERAL && !currentUser.isPiloto) throw new Error("SOMENTE_PILOTOS");
-      if(lista.some(r=>r.saram===currentUser.saram)) throw new Error("JA_RESERVADO");
-      lista.push({ saram: currentUser.saram, posto: currentUser.posto, nome: currentUser.nome, isPiloto: !!currentUser.isPiloto, ts: Date.now() });
-      tx.set(ref, { date: selectedDateKey, turno: selectedTurno, lista });
+      if(count >= total) throw new Error("ESGOTADO");
+      if(count >= VAGAS_GERAL && !currentUser.isPiloto) throw new Error("SOMENTE_PILOTOS");
+      if(myResSnap.exists()) throw new Error("JA_RESERVADO");
+      tx.set(myResRef, {
+        saram: currentUser.saram, posto: currentUser.posto, nome: currentUser.nome,
+        isPiloto: !!currentUser.isPiloto, date: selectedDateKey, turno: selectedTurno, ts: Date.now()
+      });
+      tx.set(parentRef, { date: selectedDateKey, turno: selectedTurno, count: count + 1 }, { merge: true });
     });
     await setDoc(doc(db, "historico", `${currentUser.saram}_${selectedDateKey}_${selectedTurno}`), {
       saram: currentUser.saram, nome: currentUser.nome, posto: currentUser.posto,
@@ -953,13 +965,16 @@ async function reservar(){
 }
 
 async function cancelarReserva(saram){
-  const ref = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno));
+  const parentRef = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno));
+  const resRef = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno), "reservas", saram);
   try{
     await runTransaction(db, async (tx) => {
-      const snap = await tx.get(ref);
-      const lista = snap.exists() ? (snap.data().lista || []) : [];
-      const novaLista = lista.filter(r => r.saram !== saram);
-      tx.set(ref, { date: selectedDateKey, turno: selectedTurno, lista: novaLista });
+      const parentSnap = await tx.get(parentRef);
+      const resSnap = await tx.get(resRef);
+      if(!resSnap.exists()) return;
+      const count = parentSnap.exists() ? (parentSnap.data().count || 0) : 0;
+      tx.delete(resRef);
+      tx.set(parentRef, { date: selectedDateKey, turno: selectedTurno, count: Math.max(0, count - 1) }, { merge: true });
     });
     await updateDoc(doc(db, "historico", `${saram}_${selectedDateKey}_${selectedTurno}`), { status: "cancelado" }).catch(()=>{});
     showToast("Reserva cancelada.");
