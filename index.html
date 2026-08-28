@@ -118,6 +118,7 @@ body{
 .gauge{flex:1;display:flex;gap:3px;align-items:center;}
 .tick{height:16px;flex:1;border-radius:2px;background:#2A353E;}
 .tick.on{background:var(--accent);}
+.tick.on.piloto{background:var(--info);}
 .tick.on.full{background:var(--danger);}
 .turno-status{min-width:64px;text-align:right;}
 .count{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;}
@@ -200,8 +201,12 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
 .tag-pago{background:var(--good-bg);color:var(--good);}
 .tag-devendo{background:var(--danger-bg);color:#E6A99E;}
 .tag-admin{background:var(--accent-dim);color:var(--accent);}
+.tag-piloto{background:var(--info-bg);color:var(--info);}
 .tag-nao-lido{background:var(--danger-bg);color:#E6A99E;}
 .empty-state{padding:40px 20px;text-align:center;color:var(--text-dim);font-size:13px;}
+.edit-panel{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);}
+.chk-row{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);margin:2px 0 14px;}
+.chk-row input{width:auto;}
 
 /* ---------- ADMIN SUBNAV ---------- */
 .subnav{display:flex;gap:6px;padding:14px 16px 4px;overflow-x:auto;scrollbar-width:none;}
@@ -282,6 +287,10 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
           <input type="text" id="cadSaram" placeholder="Ex.: 1234567" inputmode="numeric">
         </div>
         <div class="form-row">
+          <label>Telefone</label>
+          <input type="text" id="cadTelefone" placeholder="Ex.: (55) 99999-9999" inputmode="tel">
+        </div>
+        <div class="form-row">
           <label>Senha (mín. 6 caracteres)</label>
           <input type="password" id="cadSenha" placeholder="••••••••">
         </div>
@@ -324,7 +333,7 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
         <button class="btn-logout" id="btnLogout">Sair</button>
       </div>
       <div class="topbar-meta">
-        <span class="pill-meta">CAP. 15 / TURNO</span>
+        <span class="pill-meta" id="capMetaPill">CAP. -- / TURNO</span>
         <span class="pill-meta">1H POR TURNO</span>
         <span class="pill-live"><span class="dot-live"></span>AO VIVO</span>
       </div>
@@ -396,6 +405,7 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
         <div class="subnav-btn active" data-sub="pendentes">Pendentes</div>
         <div class="subnav-btn" data-sub="usuarios">Usuários</div>
         <div class="subnav-btn" data-sub="pagamentos">Pagamentos</div>
+        <div class="subnav-btn" data-sub="vagas">Vagas</div>
         <div class="subnav-btn" data-sub="avisos">Avisos</div>
       </div>
 
@@ -418,7 +428,9 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
             </div>
             <div class="form-row"><label>Nome</label><input type="text" id="addNome" maxlength="30"></div>
             <div class="form-row"><label>SARAM</label><input type="text" id="addSaram" inputmode="numeric"></div>
+            <div class="form-row"><label>Telefone</label><input type="text" id="addTelefone" placeholder="Ex.: (55) 99999-9999" inputmode="tel"></div>
             <div class="form-row"><label>Senha temporária</label><input type="text" id="addSenha" placeholder="mín. 6 caracteres"></div>
+            <label class="chk-row"><input type="checkbox" id="addPiloto"> Piloto do Pampa (pode reservar vagas exclusivas)</label>
             <button class="btn btn-primary" id="btnAddUser">Criar usuário aprovado</button>
           </div>
         </div>
@@ -447,6 +459,21 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
         <div class="section-title">Controle de pagamentos</div>
         <div class="month-select-wrap"><select id="pagMonthSelect"></select></div>
         <div class="card-list" id="pagamentosList"></div>
+      </div>
+
+      <div id="adminVagas" class="hidden">
+        <div class="section-title" style="padding-top:2px;">Vagas por turno</div>
+        <div class="card-list">
+          <div class="list-card">
+            <div class="meta" style="margin-bottom:12px;line-height:1.5;">
+              Cada turno tem vagas gerais (qualquer usuário aprovado pode reservar) e vagas exclusivas
+              para pilotos (só usuários marcados como piloto). Pilotos também podem usar as vagas gerais.
+            </div>
+            <div class="form-row"><label>Vagas gerais</label><input type="number" id="vagasGeralInput" min="0" step="1"></div>
+            <div class="form-row"><label>Vagas exclusivas para pilotos</label><input type="number" id="vagasPilotoInput" min="0" step="1"></div>
+            <button class="btn btn-primary" id="btnSalvarVagas">Salvar configuração de vagas</button>
+          </div>
+        </div>
       </div>
 
       <div id="adminAvisos" class="hidden">
@@ -527,7 +554,9 @@ const firebaseConfig = {
   appId: "1:1086071589890:web:0f679985c7ad18cf0bab1b"
 };
 
-const CAPACIDADE = 15;
+let VAGAS_GERAL = 6;
+let VAGAS_PILOTO = 2;
+function totalVagas(){ return VAGAS_GERAL + VAGAS_PILOTO; }
 const TURNOS = [
   "05h00-06h00","06h00-07h00","07h00-08h00","08h00-09h00",
   "11h00-12h00","12h00-13h00",
@@ -571,11 +600,13 @@ function showToast(msg){
   clearTimeout(t._timer);
   t._timer = setTimeout(()=>t.classList.remove("show"), 2800);
 }
+function apenasDigitos(s){ return String(s||"").replace(/\D/g,""); }
+function esc(s){ return String(s??"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* =======================================================================
    ESTADO GLOBAL
    ======================================================================= */
-let currentUser = null;   // { uid, saram, nome, posto, isAdmin, status }
+let currentUser = null;   // { uid, saram, nome, posto, telefone, isAdmin, isPiloto, status }
 let currentTab = "agendar";
 let unreadAvisos = [];
 
@@ -621,9 +652,11 @@ document.getElementById("btnCadastro").onclick = async () => {
   const posto = document.getElementById("cadPosto").value;
   const nome = document.getElementById("cadNome").value.trim();
   const saram = document.getElementById("cadSaram").value.trim();
+  const telefone = document.getElementById("cadTelefone").value.trim();
   const senha = document.getElementById("cadSenha").value;
   const senha2 = document.getElementById("cadSenha2").value;
   if(!nome || !saram){ showAuthError("Preencha nome e SARAM."); return; }
+  if(apenasDigitos(telefone).length < 10){ showAuthError("Informe um telefone válido, com DDD."); return; }
   if(senha.length < 6){ showAuthError("A senha precisa ter pelo menos 6 caracteres."); return; }
   if(senha !== senha2){ showAuthError("As senhas não coincidem."); return; }
 
@@ -637,9 +670,10 @@ document.getElementById("btnCadastro").onclick = async () => {
     const isFirst = usuariosSnap.empty;
 
     await setDoc(doc(db, "usuarios", saram), {
-      saram, nome, posto,
+      saram, nome, posto, telefone,
       status: isFirst ? "aprovado" : "pendente",
       isAdmin: isFirst,
+      isPiloto: false,
       criadoEm: serverTimestamp()
     });
     if(isFirst){
@@ -687,7 +721,7 @@ async function handleAuthedUser(user, retriesLeft){
     return;
   }
   const data = udoc.data();
-  currentUser = { uid: user.uid, saram, nome: data.nome, posto: data.posto, isAdmin: !!data.isAdmin, status: data.status };
+  currentUser = { uid: user.uid, saram, nome: data.nome, posto: data.posto, telefone: data.telefone || "", isAdmin: !!data.isAdmin, isPiloto: !!data.isPiloto, status: data.status };
 
   if(data.status === "pendente"){ showScreen("screenPendente"); return; }
   if(data.status === "bloqueado"){ showScreen("screenBloqueado"); return; }
@@ -699,6 +733,7 @@ async function handleAuthedUser(user, retriesLeft){
   document.getElementById("contasAdminAdd").classList.toggle("hidden", !currentUser.isAdmin);
 
   initAvisosWatch();
+  initVagasConfigWatch();
   switchTab("agendar");
   const today = new Date(); today.setHours(0,0,0,0);
   selecionarDia(dateKey(today));
@@ -731,11 +766,12 @@ document.querySelectorAll(".subnav-btn").forEach(btn=>{
     document.querySelectorAll(".subnav-btn").forEach(b=>b.classList.remove("active"));
     btn.classList.add("active");
     const sub = btn.dataset.sub;
-    ["Pendentes","Usuarios","Pagamentos","Avisos"].forEach(s=>{
+    ["Pendentes","Usuarios","Pagamentos","Vagas","Avisos"].forEach(s=>{
       document.getElementById("admin"+s).classList.toggle("hidden", s.toLowerCase()!==sub);
     });
     if(sub==="usuarios") renderUsuariosList();
     if(sub==="pagamentos") { renderPagamentosList(); carregarPixConfig(); }
+    if(sub==="vagas") populateVagasForm();
     if(sub==="avisos") renderAvisosAdminList();
   };
 });
@@ -764,16 +800,20 @@ function buildDayStrip(){
 }
 
 function renderTurnoList(){
+  if(!selectedDateKey) return;
   const list = document.getElementById("turnoList");
   const label = document.getElementById("listLabel");
   const d = new Date(selectedDateKey+"T00:00:00");
   label.textContent = "Turnos — " + fmtDatePt(d) + (isToday(d) ? " (hoje)" : "");
   list.innerHTML = "";
 
+  const total = totalVagas();
   TURNOS.forEach(turno => {
     const roster = rosterMap[turno] || [];
     const count = roster.length;
-    const full = count >= CAPACIDADE;
+    const full = count >= total;
+    const somentePiloto = !full && count >= VAGAS_GERAL;
+    const bloqueadoPraMim = somentePiloto && !currentUser?.isPiloto;
     const mine = roster.some(r => r.saram === currentUser?.saram);
 
     const card = document.createElement("div");
@@ -782,16 +822,22 @@ function renderTurnoList(){
 
     const [ini,fim] = turno.split("-");
     let ticks = "";
-    for(let i=0;i<CAPACIDADE;i++){
+    for(let i=0;i<total;i++){
       const on = i < count;
-      ticks += `<div class="tick ${on?"on":""} ${on&&full?"full":""}"></div>`;
+      const zonaPiloto = i >= VAGAS_GERAL;
+      ticks += `<div class="tick ${on?"on":""} ${zonaPiloto?"piloto":""} ${on&&full?"full":""}"></div>`;
     }
+    let statusLabel = "DISPONÍVEL";
+    if(mine) statusLabel = "VOCÊ ESTÁ AQUI";
+    else if(full) statusLabel = "ESGOTADO";
+    else if(bloqueadoPraMim) statusLabel = "SÓ PILOTOS";
+
     card.innerHTML = `
       <div class="turno-time">${ini}<small>${fim}</small></div>
       <div class="gauge">${ticks}</div>
       <div class="turno-status">
-        <div class="count ${full?"full":""}">${count}/${CAPACIDADE}</div>
-        <div class="status-label ${full?"full":"ok"}">${mine ? "VOCÊ ESTÁ AQUI" : (full?"ESGOTADO":"DISPONÍVEL")}</div>
+        <div class="count ${full?"full":""}">${count}/${total}</div>
+        <div class="status-label ${(full||bloqueadoPraMim)?"full":"ok"}">${statusLabel}</div>
       </div>`;
     list.appendChild(card);
   });
@@ -832,12 +878,16 @@ function openSheet(turno){
 
 function refreshSheetRoster(){
   const roster = rosterMap[selectedTurno] || [];
-  const full = roster.length >= CAPACIDADE;
+  const total = totalVagas();
+  const full = roster.length >= total;
+  const somentePiloto = !full && roster.length >= VAGAS_GERAL;
+  const bloqueadoPraMim = somentePiloto && !currentUser?.isPiloto;
   const jaReservado = roster.some(r => r.saram === currentUser?.saram);
   const d = new Date(selectedDateKey+"T00:00:00");
 
   document.getElementById("sheetTitle").textContent = selectedTurno;
-  document.getElementById("sheetSub").textContent = fmtDatePt(d) + " · " + roster.length + " de " + CAPACIDADE + " vagas ocupadas";
+  document.getElementById("sheetSub").textContent = fmtDatePt(d) + " · " + roster.length + " de " + total +
+    " vagas ocupadas (" + VAGAS_GERAL + " gerais + " + VAGAS_PILOTO + " pilotos)";
 
   const rosterEl = document.getElementById("roster");
   if(roster.length===0){
@@ -845,7 +895,7 @@ function refreshSheetRoster(){
   }else{
     rosterEl.innerHTML = roster.map((r) => `
       <div class="roster-item ${r.saram===currentUser?.saram ? "mine":""}">
-        <div class="who"><b>${r.posto}</b>${r.nome}</div>
+        <div class="who"><b>${r.posto}</b>${r.nome}${r.isPiloto ? ' <span class="tag tag-piloto">Piloto</span>' : ''}</div>
         ${(r.saram===currentUser?.saram || currentUser.isAdmin) ? `<button class="rm" data-saram="${r.saram}">Cancelar</button>` : ""}
       </div>`).join("");
     rosterEl.querySelectorAll(".rm").forEach(btn=>{
@@ -860,6 +910,9 @@ function refreshSheetRoster(){
     form.style.display = "none";
   }else if(jaReservado){
     banner.innerHTML = `<div class="info-banner">Você já está reservado neste turno.</div>`;
+    form.style.display = "none";
+  }else if(bloqueadoPraMim){
+    banner.innerHTML = `<div class="full-banner">As ${VAGAS_GERAL} vagas gerais deste turno já foram preenchidas. As ${VAGAS_PILOTO} vagas restantes são exclusivas para pilotos do Pampa.</div>`;
     form.style.display = "none";
   }else{
     banner.innerHTML = "";
@@ -881,9 +934,11 @@ async function reservar(){
     await runTransaction(db, async (tx) => {
       const snap = await tx.get(ref);
       const lista = snap.exists() ? (snap.data().lista || []) : [];
-      if(lista.length >= CAPACIDADE) throw new Error("ESGOTADO");
+      const total = totalVagas();
+      if(lista.length >= total) throw new Error("ESGOTADO");
+      if(lista.length >= VAGAS_GERAL && !currentUser.isPiloto) throw new Error("SOMENTE_PILOTOS");
       if(lista.some(r=>r.saram===currentUser.saram)) throw new Error("JA_RESERVADO");
-      lista.push({ saram: currentUser.saram, posto: currentUser.posto, nome: currentUser.nome, ts: Date.now() });
+      lista.push({ saram: currentUser.saram, posto: currentUser.posto, nome: currentUser.nome, isPiloto: !!currentUser.isPiloto, ts: Date.now() });
       tx.set(ref, { date: selectedDateKey, turno: selectedTurno, lista });
     });
     await setDoc(doc(db, "historico", `${currentUser.saram}_${selectedDateKey}_${selectedTurno}`), {
@@ -893,6 +948,7 @@ async function reservar(){
     showToast("Reserva confirmada.");
   }catch(e){
     if(e.message === "ESGOTADO") showToast("Turno esgotou agora. Escolha outro horário.");
+    else if(e.message === "SOMENTE_PILOTOS") showToast("As vagas gerais esgotaram. As vagas restantes são exclusivas para pilotos.");
     else if(e.message === "JA_RESERVADO") showToast("Você já está reservado neste turno.");
     else { console.error(e); showToast("Erro ao reservar. Tente novamente."); }
   }
@@ -1047,6 +1103,46 @@ function openAvisoGate(){
 document.getElementById("btnAvisoGateFechar").onclick = () => document.getElementById("avisoGateOverlay").classList.remove("open");
 
 /* =======================================================================
+   CONFIGURAÇÃO DE VAGAS (gerais x exclusivas piloto)
+   ======================================================================= */
+let unsubscribeVagasConfig = null;
+function initVagasConfigWatch(){
+  if(unsubscribeVagasConfig){ unsubscribeVagasConfig(); unsubscribeVagasConfig = null; }
+  unsubscribeVagasConfig = onSnapshot(doc(db,"config","vagas"), (snap) => {
+    const d = snap.exists() ? snap.data() : {};
+    VAGAS_GERAL = Number.isFinite(d.geral) ? d.geral : 6;
+    VAGAS_PILOTO = Number.isFinite(d.pilotos) ? d.pilotos : 2;
+    updateCapPill();
+    renderTurnoList();
+    if(document.getElementById("overlay").classList.contains("open") && selectedTurno){
+      refreshSheetRoster();
+    }
+    populateVagasForm();
+  }, (err) => console.error(err));
+}
+function updateCapPill(){
+  const el = document.getElementById("capMetaPill");
+  if(el) el.textContent = `CAP. ${totalVagas()} (${VAGAS_GERAL}+${VAGAS_PILOTO}) / TURNO`;
+}
+function populateVagasForm(){
+  const g = document.getElementById("vagasGeralInput");
+  const p = document.getElementById("vagasPilotoInput");
+  if(g) g.value = VAGAS_GERAL;
+  if(p) p.value = VAGAS_PILOTO;
+}
+document.getElementById("btnSalvarVagas").onclick = async () => {
+  if(!currentUser?.isAdmin) return;
+  const geral = parseInt(document.getElementById("vagasGeralInput").value, 10);
+  const pilotos = parseInt(document.getElementById("vagasPilotoInput").value, 10);
+  if(!Number.isFinite(geral) || geral < 0 || !Number.isFinite(pilotos) || pilotos < 0){
+    showToast("Informe números válidos (0 ou mais) para as vagas.");
+    return;
+  }
+  await setDoc(doc(db, "config", "vagas"), { geral, pilotos, atualizadoEm: serverTimestamp() });
+  showToast("Configuração de vagas salva.");
+};
+
+/* =======================================================================
    PRESTAÇÃO DE CONTAS
    ======================================================================= */
 let contasChartInstance = null;
@@ -1170,10 +1266,10 @@ async function renderUsuariosList(){
     const tagClass = u.status==="aprovado" ? "tag-aprovado" : u.status==="bloqueado" ? "tag-bloqueado" : "tag-pendente";
     html += `<div class="list-card">
       <div class="row1">
-        <div class="title">${u.posto} ${u.nome} ${u.isAdmin?'<span class="tag tag-admin">Admin</span>':''}</div>
+        <div class="title">${esc(u.posto)} ${esc(u.nome)} ${u.isAdmin?'<span class="tag tag-admin">Admin</span>':''} ${u.isPiloto?'<span class="tag tag-piloto">Piloto</span>':''}</div>
         <span class="tag ${tagClass}">${u.status}</span>
       </div>
-      <div class="meta">SARAM ${u.saram}</div>
+      <div class="meta">SARAM ${esc(u.saram)} · Tel: ${esc(u.telefone) || "não informado"}</div>
       <div class="btn-row" style="margin-top:10px;">
         ${u.status==="bloqueado"
           ? `<button class="btn btn-good btn-sm" style="flex:1;" data-act="desbloquear" data-saram="${u.saram}">Desbloquear</button>`
@@ -1184,10 +1280,37 @@ async function renderUsuariosList(){
         ${u.isAdmin
           ? `<button class="btn btn-ghost btn-sm" style="flex:1;" data-act="remover-admin" data-saram="${u.saram}">Remover admin</button>`
           : `<button class="btn btn-ghost btn-sm" style="flex:1;" data-act="tornar-admin" data-saram="${u.saram}">Tornar admin</button>`}
+        ${u.isPiloto
+          ? `<button class="btn btn-ghost btn-sm" style="flex:1;" data-act="remover-piloto" data-saram="${u.saram}">Remover piloto</button>`
+          : `<button class="btn btn-ghost btn-sm" style="flex:1;" data-act="tornar-piloto" data-saram="${u.saram}">Tornar piloto</button>`}
+      </div>
+      <div class="btn-row" style="margin-top:8px;">
+        <button class="btn btn-ghost btn-sm" style="flex:1;" data-act="editar" data-saram="${u.saram}">Editar cadastro</button>
+      </div>
+      <div class="edit-panel hidden" id="edit-${u.saram}">
+        <div class="form-row"><label>Posto/Graduação</label>
+          <select id="edit-posto-${u.saram}">
+            <option value="Cel">Cel</option><option value="Ten Cel">Ten Cel</option><option value="Maj">Maj</option>
+            <option value="Cap">Cap</option><option value="1º Ten">1º Ten</option><option value="2º Ten">2º Ten</option>
+            <option value="Asp">Asp</option><option value="S Ten">S Ten</option><option value="1º Sgt">1º Sgt</option>
+            <option value="2º Sgt">2º Sgt</option><option value="3º Sgt">3º Sgt</option><option value="Cb">Cb</option>
+            <option value="S1">S1</option><option value="S2">S2</option>
+          </select>
+        </div>
+        <div class="form-row"><label>Nome</label><input type="text" id="edit-nome-${u.saram}" maxlength="30" value="${esc(u.nome||"")}"></div>
+        <div class="form-row"><label>Telefone</label><input type="text" id="edit-telefone-${u.saram}" value="${esc(u.telefone||"")}"></div>
+        <button class="btn btn-primary btn-sm" style="width:100%;" data-act="salvar-edicao" data-saram="${u.saram}">Salvar alterações</button>
       </div>
     </div>`;
   });
   list.innerHTML = html || `<div class="empty-state">Nenhum usuário.</div>`;
+
+  snap.forEach(d=>{
+    const u = d.data();
+    const sel = document.getElementById(`edit-posto-${u.saram}`);
+    if(sel) sel.value = u.posto;
+  });
+
   list.querySelectorAll("button[data-act]").forEach(btn=>{
     btn.onclick = async () => {
       const saram = btn.dataset.saram;
@@ -1207,6 +1330,27 @@ async function renderUsuariosList(){
         if(!confirm("Remover a permissão de administrador deste usuário?")) return;
         await updateDoc(doc(db,"usuarios",saram), { isAdmin:false });
       }
+      else if(btn.dataset.act==="tornar-piloto"){
+        await updateDoc(doc(db,"usuarios",saram), { isPiloto:true });
+      }
+      else if(btn.dataset.act==="remover-piloto"){
+        await updateDoc(doc(db,"usuarios",saram), { isPiloto:false });
+      }
+      else if(btn.dataset.act==="editar"){
+        document.getElementById(`edit-${saram}`).classList.toggle("hidden");
+        return;
+      }
+      else if(btn.dataset.act==="salvar-edicao"){
+        const posto = document.getElementById(`edit-posto-${saram}`).value;
+        const nome = document.getElementById(`edit-nome-${saram}`).value.trim();
+        const telefone = document.getElementById(`edit-telefone-${saram}`).value.trim();
+        if(!nome){ showToast("O nome não pode ficar vazio."); return; }
+        if(apenasDigitos(telefone).length < 10){ showToast("Informe um telefone válido, com DDD."); return; }
+        await updateDoc(doc(db,"usuarios",saram), { posto, nome, telefone });
+        showToast("Cadastro atualizado.");
+        renderUsuariosList();
+        return;
+      }
       showToast("Atualizado.");
       renderUsuariosList();
     };
@@ -1217,8 +1361,11 @@ document.getElementById("btnAddUser").onclick = async () => {
   const posto = document.getElementById("addPosto").value;
   const nome = document.getElementById("addNome").value.trim();
   const saram = document.getElementById("addSaram").value.trim();
+  const telefone = document.getElementById("addTelefone").value.trim();
   const senha = document.getElementById("addSenha").value;
+  const isPiloto = document.getElementById("addPiloto").checked;
   if(!nome || !saram || senha.length<6){ showToast("Preencha nome, SARAM e senha (mín. 6 caracteres)."); return; }
+  if(apenasDigitos(telefone).length < 10){ showToast("Informe um telefone válido, com DDD."); return; }
 
   try{
     // App secundário para não deslogar o admin ao criar a nova conta
@@ -1226,11 +1373,13 @@ document.getElementById("btnAddUser").onclick = async () => {
     const secondaryAuth = getAuth(secondaryApp);
     await createUserWithEmailAndPassword(secondaryAuth, saramToEmail(saram), senha);
     await signOut(secondaryAuth);
-    await setDoc(doc(db,"usuarios", saram), { saram, nome, posto, status:"aprovado", isAdmin:false, criadoEm: serverTimestamp() });
+    await setDoc(doc(db,"usuarios", saram), { saram, nome, posto, telefone, status:"aprovado", isAdmin:false, isPiloto, criadoEm: serverTimestamp() });
     showToast("Usuário criado e aprovado.");
     document.getElementById("addNome").value = "";
     document.getElementById("addSaram").value = "";
+    document.getElementById("addTelefone").value = "";
     document.getElementById("addSenha").value = "";
+    document.getElementById("addPiloto").checked = false;
     renderUsuariosList();
   }catch(e){
     console.error(e);
