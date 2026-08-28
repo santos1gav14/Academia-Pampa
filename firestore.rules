@@ -1,0 +1,128 @@
+rules_version = '2';
+
+// =============================================================================
+// Regras de segurança do Firestore — Academia do Pampa
+//
+// COMO APLICAR
+// 1. No Console do Firebase, abra seu projeto > Firestore Database > Regras.
+// 2. Cole o conteúdo deste arquivo por cima do que estiver lá e publique.
+//    (Ou, se preferir a CLI: `firebase deploy --only firestore:rules`,
+//    com este arquivo referenciado em firebase.json.)
+//
+// BOOTSTRAP DO PRIMEIRO ADMIN (leia antes de publicar)
+// Com estas regras, todo autocadastro nasce com status "pendente" e
+// isAdmin=false — de propósito, para que ninguém consiga virar admin só
+// forjando a chamada ao Firestore pelo console do navegador. Isso significa
+// que, quando não existe NENHUM admin ainda, ninguém consegue aprovar
+// ninguém pelo app. Para o primeiríssimo admin do sistema:
+//   1. Peça para essa pessoa se cadastrar normalmente pelo app (vai ficar
+//      "Cadastro em análise").
+//   2. No Console do Firebase, vá em Firestore Database > Dados >
+//      coleção "usuarios" > documento com o SARAM dela.
+//   3. Edite os campos manualmente: status = "aprovado", isAdmin = true.
+// Depois disso, essa pessoa já consegue aprovar os demais e conceder admin
+// a outras pessoas direto pelo app.
+// =============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- helpers ----
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function mySaram() {
+      return request.auth.token.email.split('@')[0];
+    }
+    function myUserDoc() {
+      return get(/databases/$(database)/documents/usuarios/$(mySaram()));
+    }
+    function isApproved() {
+      return isSignedIn() && myUserDoc().data.status == 'aprovado';
+    }
+    function isAdmin() {
+      return isSignedIn() && myUserDoc().data.isAdmin == true && myUserDoc().data.status == 'aprovado';
+    }
+
+    // ---- usuarios/{saram} ----
+    // Qualquer pessoa logada pode ler a lista (é o roster do esquadrão, já
+    // aparece nas reservas de turno); só o próprio dono pode CRIAR seu
+    // cadastro inicial (sempre pendente/sem privilégios); só admin edita
+    // status, posto, nome, telefone, isAdmin e isPiloto de qualquer um.
+    match /usuarios/{saram} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && saram == mySaram()
+        && request.resource.data.saram == saram
+        && request.resource.data.status == 'pendente'
+        && request.resource.data.isAdmin == false
+        && request.resource.data.isPiloto == false;
+      allow create: if isAdmin(); // admin cadastrando outra pessoa direto já aprovada
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ---- reservas_academia/{dateKey_turno} ----
+    // Vagas e listas de reserva de cada turno. Qualquer aprovado pode ler
+    // (para ver disponibilidade) e reservar/cancelar; a elegibilidade entre
+    // vaga geral e vaga exclusiva de piloto é validada de novo no app dentro
+    // da transação do Firestore. Não dá para validar aqui, com regras, que
+    // cada edição da lista mexeu só na própria entrada (o Firestore Rules
+    // não tem como iterar arrays de mapas) — o app já usa transação para
+    // evitar duas pessoas ocupando a mesma vaga ao mesmo tempo, e o risco
+    // residual (um aprovado adulterar a entrada de outro aprovado na lista)
+    // é aceitável para um grupo fechado de usuários já aprovados.
+    match /reservas_academia/{docId} {
+      allow read: if isApproved();
+      allow create, update: if isApproved();
+      allow delete: if isAdmin();
+    }
+
+    // ---- historico/{saram_dateKey_turno} ----
+    // Cada usuário só lê e cancela (atualiza) o próprio histórico; admin lê
+    // e cancela o de qualquer um (usado ao cancelar reserva de outra pessoa).
+    match /historico/{docId} {
+      allow read: if isApproved() && (resource.data.saram == mySaram() || isAdmin());
+      allow create: if isApproved() && request.resource.data.saram == mySaram();
+      allow update: if isApproved() && (resource.data.saram == mySaram() || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // ---- avisos/{id} ----
+    match /avisos/{id} {
+      allow read: if isApproved();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ---- avisos_lidos/{saram_avisoId} ----
+    // Cada usuário só marca ciência em nome de si mesmo.
+    match /avisos_lidos/{id} {
+      allow read: if isApproved() && resource.data.saram == mySaram();
+      allow create, update: if isApproved() && request.resource.data.saram == mySaram();
+    }
+
+    // ---- financas/{id} (prestação de contas) ----
+    // Leitura é visível para todo aprovado (transparência financeira);
+    // só admin lança receita/despesa.
+    match /financas/{id} {
+      allow read: if isApproved();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ---- pagamentos/{saram_mesKey} ----
+    // Cada usuário lê o próprio status de pagamento; admin lê e edita o de
+    // todo mundo (tela de controle de pagamentos).
+    match /pagamentos/{id} {
+      allow read: if isApproved() && (resource.data.saram == mySaram() || isAdmin());
+      allow create, update: if isAdmin();
+    }
+
+    // ---- config/pix, config/vagas ----
+    // Leitura liberada para todo aprovado (chave Pix para pagar mensalidade,
+    // capacidade de vagas para calcular disponibilidade); só admin edita.
+    match /config/{id} {
+      allow read: if isApproved();
+      allow create, update: if isAdmin();
+    }
+  }
+}

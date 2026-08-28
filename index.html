@@ -661,24 +661,22 @@ document.getElementById("btnCadastro").onclick = async () => {
   if(senha !== senha2){ showAuthError("As senhas não coincidem."); return; }
 
   try{
-    // A conta precisa existir (usuário autenticado) antes de consultar/gravar no Firestore,
-    // pois as regras de segurança exigem login para ler a coleção "usuarios".
+    // A conta precisa existir (usuário autenticado) antes de gravar no Firestore,
+    // pois as regras de segurança exigem login para criar o próprio documento em "usuarios".
     const cred = await createUserWithEmailAndPassword(auth, saramToEmail(saram), senha);
 
-    // Primeiro usuário do sistema vira admin aprovado automaticamente (bootstrap)
-    const usuariosSnap = await getDocs(collection(db, "usuarios"));
-    const isFirst = usuariosSnap.empty;
-
+    // Todo autocadastro nasce pendente e sem privilégios: quem decide isso são as regras
+    // de segurança do Firestore, não este código do navegador (que qualquer um pode alterar).
+    // O primeiro administrador do sistema precisa ser promovido manualmente no Console do
+    // Firebase (Firestore > usuarios > <seu SARAM> > isAdmin=true, status="aprovado") —
+    // veja firestore.rules para o passo a passo completo.
     await setDoc(doc(db, "usuarios", saram), {
       saram, nome, posto, telefone,
-      status: isFirst ? "aprovado" : "pendente",
-      isAdmin: isFirst,
+      status: "pendente",
+      isAdmin: false,
       isPiloto: false,
       criadoEm: serverTimestamp()
     });
-    if(isFirst){
-      showToast("Cadastro criado como administrador inicial.");
-    }
     handleAuthedUser(cred.user);
   }catch(e){
     console.error(e);
