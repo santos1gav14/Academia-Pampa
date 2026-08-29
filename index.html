@@ -479,9 +479,11 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
             <div class="meta" style="margin-bottom:12px;line-height:1.5;">
               Cada turno tem vagas gerais (qualquer usuário aprovado pode reservar) e vagas exclusivas
               para pilotos (só usuários marcados como piloto). Pilotos também podem usar as vagas gerais.
+              A antecedência define com quantas horas de antecipação um turno abre para reserva.
             </div>
             <div class="form-row"><label>Vagas gerais</label><input type="number" id="vagasGeralInput" min="0" step="1"></div>
             <div class="form-row"><label>Vagas exclusivas para pilotos</label><input type="number" id="vagasPilotoInput" min="0" step="1"></div>
+            <div class="form-row"><label>Antecedência mínima para reservar (horas)</label><input type="number" id="vagasJanelaInput" min="1" step="1"></div>
             <button class="btn btn-primary" id="btnSalvarVagas">Salvar configuração de vagas</button>
           </div>
         </div>
@@ -592,7 +594,8 @@ const TURNOS = [
   "11h00-12h00","12h00-13h00",
   "16h00-17h00","17h00-18h00","18h00-19h00","19h00-20h00","20h00-21h00"
 ];
-const JANELA_RESERVA_MS = 48 * 60 * 60 * 1000; // só dá pra reservar com até 48h de antecedência
+let JANELA_HORAS = 24; // ajustável pelo admin (Admin > Vagas); padrão 24h de antecedência
+function janelaMs(){ return JANELA_HORAS * 60 * 60 * 1000; }
 function turnoInicio(dateKey, turno){
   const m = turno.match(/^(\d{2})h(\d{2})/);
   const d = new Date(dateKey + "T00:00:00");
@@ -602,10 +605,10 @@ function turnoInicio(dateKey, turno){
 function dentroDaJanela(dateKey, turno){
   const inicio = turnoInicio(dateKey, turno).getTime();
   const agora = Date.now();
-  return inicio >= agora && (inicio - agora) <= JANELA_RESERVA_MS;
+  return inicio >= agora && (inicio - agora) <= janelaMs();
 }
 function fmtAbertura(dateKey, turno){
-  const abre = new Date(turnoInicio(dateKey, turno).getTime() - JANELA_RESERVA_MS);
+  const abre = new Date(turnoInicio(dateKey, turno).getTime() - janelaMs());
   return String(abre.getDate()).padStart(2, "0") + "/" + String(abre.getMonth() + 1).padStart(2, "0") +
     " " + String(abre.getHours()).padStart(2, "0") + "h" + String(abre.getMinutes()).padStart(2, "0");
 }
@@ -1004,7 +1007,7 @@ function refreshSheetRoster(){
   if(jaReservado){
     banner.innerHTML = `<div class="info-banner">Você já está reservado neste turno.</div>`;
   }else if(!aberto){
-    banner.innerHTML = `<div class="info-banner">Esse turno só abre para reserva a partir de ${fmtAbertura(selectedDateKey, selectedTurno)} (até 48h de antecedência).</div>`;
+    banner.innerHTML = `<div class="info-banner">Esse turno só abre para reserva a partir de ${fmtAbertura(selectedDateKey, selectedTurno)} (até ${JANELA_HORAS}h de antecedência).</div>`;
   }else if(jaNaFila){
     banner.innerHTML = `<div class="info-banner">Você está na fila de espera. Se uma vaga abrir, você é reservado(a) automaticamente e avisado(a) por notificação.</div>`;
     formSairFila.classList.remove("hidden");
@@ -1029,7 +1032,7 @@ async function reservar(){
     return;
   }
   if(!dentroDaJanela(selectedDateKey, selectedTurno)){
-    showToast("Esse turno só abre para reserva com até 48h de antecedência.");
+    showToast(`Esse turno só abre para reserva com até ${JANELA_HORAS}h de antecedência.`);
     return;
   }
   const reservasCol = collection(db, COLLECTION, docId(selectedDateKey, selectedTurno), "reservas");
@@ -1296,6 +1299,7 @@ function initVagasConfigWatch(){
     const d = snap.exists() ? snap.data() : {};
     VAGAS_GERAL = Number.isFinite(d.geral) ? d.geral : 6;
     VAGAS_PILOTO = Number.isFinite(d.pilotos) ? d.pilotos : 2;
+    JANELA_HORAS = Number.isFinite(d.horasJanela) && d.horasJanela > 0 ? d.horasJanela : 24;
     updateCapPill();
     renderTurnoList();
     if(document.getElementById("overlay").classList.contains("open") && selectedTurno){
@@ -1311,18 +1315,25 @@ function updateCapPill(){
 function populateVagasForm(){
   const g = document.getElementById("vagasGeralInput");
   const p = document.getElementById("vagasPilotoInput");
+  const j = document.getElementById("vagasJanelaInput");
   if(g) g.value = VAGAS_GERAL;
   if(p) p.value = VAGAS_PILOTO;
+  if(j) j.value = JANELA_HORAS;
 }
 document.getElementById("btnSalvarVagas").onclick = async () => {
   if(!currentUser?.isAdmin) return;
   const geral = parseInt(document.getElementById("vagasGeralInput").value, 10);
   const pilotos = parseInt(document.getElementById("vagasPilotoInput").value, 10);
+  const horasJanela = parseInt(document.getElementById("vagasJanelaInput").value, 10);
   if(!Number.isFinite(geral) || geral < 0 || !Number.isFinite(pilotos) || pilotos < 0){
     showToast("Informe números válidos (0 ou mais) para as vagas.");
     return;
   }
-  await setDoc(doc(db, "config", "vagas"), { geral, pilotos, atualizadoEm: serverTimestamp() });
+  if(!Number.isFinite(horasJanela) || horasJanela < 1){
+    showToast("Informe um número de horas válido (mínimo 1) para a antecedência.");
+    return;
+  }
+  await setDoc(doc(db, "config", "vagas"), { geral, pilotos, horasJanela, atualizadoEm: serverTimestamp() });
   showToast("Configuração de vagas salva.");
 };
 
