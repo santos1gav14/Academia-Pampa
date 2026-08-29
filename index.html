@@ -69,6 +69,14 @@ body{
   font-size:11px;padding:7px 10px;border-radius:8px;cursor:pointer;
   font-family:'IBM Plex Mono',monospace;
 }
+.btn-notif{
+  position:relative;background:transparent;border:1px solid var(--border);color:var(--text);
+  font-size:14px;padding:7px 9px;border-radius:8px;cursor:pointer;line-height:1;
+}
+.notif-badge{
+  position:absolute;top:-6px;right:-6px;background:var(--danger);color:#fff;
+  font-size:9px;border-radius:8px;padding:1px 5px;font-weight:700;font-family:'IBM Plex Mono',monospace;
+}
 .topbar-meta{margin-top:14px;display:flex;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-dim);flex-wrap:wrap;}
 .pill-meta{border:1px solid var(--border);border-radius:20px;padding:4px 10px;background:var(--panel);}
 .pill-live{border:1px solid rgba(91,146,121,0.4);border-radius:20px;padding:4px 10px;background:var(--good-bg);color:var(--good);display:flex;align-items:center;gap:5px;}
@@ -330,7 +338,10 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
             <p id="userGreeting">1º/14º GAV</p>
           </div>
         </div>
-        <button class="btn-logout" id="btnLogout">Sair</button>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button class="btn-notif" id="btnNotificacoes">🔔<span class="notif-badge hidden" id="notifBadge">0</span></button>
+          <button class="btn-logout" id="btnLogout">Sair</button>
+        </div>
       </div>
       <div class="topbar-meta">
         <span class="pill-meta" id="capMetaPill">CAP. -- / TURNO</span>
@@ -511,8 +522,16 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
     <div class="sheet-sub" id="sheetSub">--</div>
     <div id="fullBanner"></div>
     <div class="roster" id="roster"></div>
+    <div class="section-title hidden" id="filaLabel" style="padding:0 0 8px;">Fila de espera</div>
+    <div class="roster" id="filaBox"></div>
     <div id="reserveForm">
       <button class="btn btn-primary" id="btnReservar">Reservar vaga</button>
+    </div>
+    <div id="filaFormEntrar" class="hidden">
+      <button class="btn btn-primary" id="btnEntrarFila">Entrar na fila de espera</button>
+    </div>
+    <div id="filaFormSair" class="hidden">
+      <button class="btn btn-ghost" id="btnSairFila">Sair da fila de espera</button>
     </div>
     <button class="btn btn-ghost" id="btnFechar">Fechar</button>
   </div>
@@ -529,13 +548,24 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
   </div>
 </div>
 
+<!-- ===================== SHEET: NOTIFICAÇÕES ===================== -->
+<div class="overlay" id="notifOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">🔔 Notificações</div>
+    <div class="sheet-sub">Avisos sobre suas reservas e fila de espera.</div>
+    <div class="card-list" id="notifList" style="padding:0;"></div>
+    <button class="btn btn-ghost" id="btnFecharNotif">Fechar</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
   getFirestore, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc,
-  collection, query, where, orderBy, onSnapshot, runTransaction, serverTimestamp
+  collection, query, where, orderBy, limit, onSnapshot, runTransaction, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
@@ -562,6 +592,23 @@ const TURNOS = [
   "11h00-12h00","12h00-13h00",
   "16h00-17h00","17h00-18h00","18h00-19h00","19h00-20h00","20h00-21h00"
 ];
+const JANELA_RESERVA_MS = 48 * 60 * 60 * 1000; // só dá pra reservar com até 48h de antecedência
+function turnoInicio(dateKey, turno){
+  const m = turno.match(/^(\d{2})h(\d{2})/);
+  const d = new Date(dateKey + "T00:00:00");
+  d.setHours(parseInt(m[1], 10), parseInt(m[2], 10), 0, 0);
+  return d;
+}
+function dentroDaJanela(dateKey, turno){
+  const inicio = turnoInicio(dateKey, turno).getTime();
+  const agora = Date.now();
+  return inicio >= agora && (inicio - agora) <= JANELA_RESERVA_MS;
+}
+function fmtAbertura(dateKey, turno){
+  const abre = new Date(turnoInicio(dateKey, turno).getTime() - JANELA_RESERVA_MS);
+  return String(abre.getDate()).padStart(2, "0") + "/" + String(abre.getMonth() + 1).padStart(2, "0") +
+    " " + String(abre.getHours()).padStart(2, "0") + "h" + String(abre.getMinutes()).padStart(2, "0");
+}
 const DOWS = ["DOM","SEG","TER","QUA","QUI","SEX","SÁB"];
 const COLLECTION = "reservas_academia";
 const EMAIL_DOMAIN = "@academiapampa.local";
@@ -613,6 +660,8 @@ let unreadAvisos = [];
 let selectedDateKey = null;
 let selectedTurno = null;
 let rosterMap = {};
+let filaMap = {};
+let notificacoesList = [];
 let unsubscribeReservas = []; // um listener por turno (ver assinarDia)
 
 /* =======================================================================
@@ -702,6 +751,7 @@ async function handleAuthedUser(user, retriesLeft){
   if(retriesLeft === undefined) retriesLeft = 5;
   unsubscribeReservas.forEach(fn=>fn());
   unsubscribeReservas = [];
+  if(unsubscribeNotificacoes){ unsubscribeNotificacoes(); unsubscribeNotificacoes = null; }
   if(!user){
     currentUser = null;
     showScreen("screenAuth");
@@ -733,6 +783,7 @@ async function handleAuthedUser(user, retriesLeft){
 
   initAvisosWatch();
   initVagasConfigWatch();
+  initNotificacoesWatch();
   switchTab("agendar");
   const today = new Date(); today.setHours(0,0,0,0);
   selecionarDia(dateKey(today));
@@ -814,6 +865,7 @@ function renderTurnoList(){
     const somentePiloto = !full && count >= VAGAS_GERAL;
     const bloqueadoPraMim = somentePiloto && !currentUser?.isPiloto;
     const mine = roster.some(r => r.saram === currentUser?.saram);
+    const aberto = dentroDaJanela(selectedDateKey, turno);
 
     const card = document.createElement("div");
     card.className = "turno-card" + (full ? " full":"") + (mine ? " mine":"");
@@ -829,6 +881,7 @@ function renderTurnoList(){
     let statusLabel = "DISPONÍVEL";
     if(mine) statusLabel = "VOCÊ ESTÁ AQUI";
     else if(full) statusLabel = "ESGOTADO";
+    else if(!aberto) statusLabel = "ABRE " + fmtAbertura(selectedDateKey, turno);
     else if(bloqueadoPraMim) statusLabel = "SÓ PILOTOS";
 
     card.innerHTML = `
@@ -849,6 +902,7 @@ function renderTurnoList(){
 function selecionarDia(k){
   selectedDateKey = k;
   rosterMap = {};
+  filaMap = {};
   buildDayStrip();
   renderTurnoList();
   assinarDia();
@@ -861,17 +915,29 @@ function assinarDia(){
   // Cada turno tem sua própria subcoleção "reservas" (um documento por
   // pessoa, dono do próprio documento) em vez de um array "lista" só —
   // isso é o que permite às regras do Firestore impedir que alguém
-  // edite a reserva de outra pessoa (ver firestore.rules).
+  // edite a reserva de outra pessoa (ver firestore.rules). A fila de
+  // espera funciona do mesmo jeito, numa subcoleção "fila" à parte.
   TURNOS.forEach(turno => {
-    const ref = collection(db, COLLECTION, docId(selectedDateKey, turno), "reservas");
-    const unsub = onSnapshot(ref, (snap) => {
+    const resRef = collection(db, COLLECTION, docId(selectedDateKey, turno), "reservas");
+    const unsubRes = onSnapshot(resRef, (snap) => {
       const lista = [];
       snap.forEach(docSnap => lista.push(docSnap.data()));
       lista.sort((a,b) => (a.ts||0) - (b.ts||0));
       rosterMap[turno] = lista;
       renderTurnoList();
     }, (err) => { console.error(err); showToast("Erro ao conectar com o banco de dados."); });
-    unsubscribeReservas.push(unsub);
+    unsubscribeReservas.push(unsubRes);
+
+    const filaRef = query(collection(db, COLLECTION, docId(selectedDateKey, turno), "fila"), orderBy("ts", "asc"));
+    const unsubFila = onSnapshot(filaRef, (snap) => {
+      const lista = [];
+      snap.forEach(docSnap => lista.push(docSnap.data()));
+      filaMap[turno] = lista;
+      if(document.getElementById("overlay").classList.contains("open") && selectedTurno === turno){
+        refreshSheetRoster();
+      }
+    }, (err) => { console.error(err); });
+    unsubscribeReservas.push(unsubFila);
   });
 }
 
@@ -883,11 +949,14 @@ function openSheet(turno){
 
 function refreshSheetRoster(){
   const roster = rosterMap[selectedTurno] || [];
+  const fila = filaMap[selectedTurno] || [];
   const total = totalVagas();
   const full = roster.length >= total;
   const somentePiloto = !full && roster.length >= VAGAS_GERAL;
   const bloqueadoPraMim = somentePiloto && !currentUser?.isPiloto;
   const jaReservado = roster.some(r => r.saram === currentUser?.saram);
+  const jaNaFila = fila.some(f => f.saram === currentUser?.saram);
+  const aberto = dentroDaJanela(selectedDateKey, selectedTurno);
   const d = new Date(selectedDateKey+"T00:00:00");
 
   document.getElementById("sheetTitle").textContent = selectedTurno;
@@ -908,20 +977,45 @@ function refreshSheetRoster(){
     });
   }
 
+  const filaLabel = document.getElementById("filaLabel");
+  const filaBox = document.getElementById("filaBox");
+  filaLabel.classList.toggle("hidden", fila.length===0);
+  if(fila.length===0){
+    filaBox.innerHTML = "";
+  }else{
+    filaBox.innerHTML = fila.map((f, i) => `
+      <div class="roster-item ${f.saram===currentUser?.saram ? "mine":""}">
+        <div class="who"><b>${i+1}º</b>${f.posto} ${f.nome}${f.isPiloto ? ' <span class="tag tag-piloto">Piloto</span>' : ''}</div>
+        ${(f.saram===currentUser?.saram || currentUser.isAdmin) ? `<button class="rm" data-saram-fila="${f.saram}">Remover</button>` : ""}
+      </div>`).join("");
+    filaBox.querySelectorAll(".rm").forEach(btn=>{
+      btn.onclick = () => sairDaFila(btn.dataset.saramFila);
+    });
+  }
+
   const banner = document.getElementById("fullBanner");
-  const form = document.getElementById("reserveForm");
-  if(full && !jaReservado){
-    banner.innerHTML = `<div class="full-banner">Turno esgotado. Escolha outro horário ou aguarde uma vaga liberar.</div>`;
-    form.style.display = "none";
-  }else if(jaReservado){
+  const formReservar = document.getElementById("reserveForm");
+  const formEntrarFila = document.getElementById("filaFormEntrar");
+  const formSairFila = document.getElementById("filaFormSair");
+  formReservar.style.display = "none";
+  formEntrarFila.classList.add("hidden");
+  formSairFila.classList.add("hidden");
+
+  if(jaReservado){
     banner.innerHTML = `<div class="info-banner">Você já está reservado neste turno.</div>`;
-    form.style.display = "none";
+  }else if(!aberto){
+    banner.innerHTML = `<div class="info-banner">Esse turno só abre para reserva a partir de ${fmtAbertura(selectedDateKey, selectedTurno)} (até 48h de antecedência).</div>`;
+  }else if(jaNaFila){
+    banner.innerHTML = `<div class="info-banner">Você está na fila de espera. Se uma vaga abrir, você é reservado(a) automaticamente e avisado(a) por notificação.</div>`;
+    formSairFila.classList.remove("hidden");
+  }else if(full){
+    banner.innerHTML = `<div class="full-banner">Turno esgotado. Entre na fila de espera — se alguém desistir, você é reservado(a) automaticamente por ordem de chegada.</div>`;
+    formEntrarFila.classList.remove("hidden");
   }else if(bloqueadoPraMim){
     banner.innerHTML = `<div class="full-banner">As ${VAGAS_GERAL} vagas gerais deste turno já foram preenchidas. As ${VAGAS_PILOTO} vagas restantes são exclusivas para pilotos do Pampa.</div>`;
-    form.style.display = "none";
   }else{
     banner.innerHTML = "";
-    form.style.display = "block";
+    formReservar.style.display = "block";
   }
 }
 
@@ -934,56 +1028,133 @@ async function reservar(){
     openAvisoGate();
     return;
   }
-  const parentRef = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno));
+  if(!dentroDaJanela(selectedDateKey, selectedTurno)){
+    showToast("Esse turno só abre para reserva com até 48h de antecedência.");
+    return;
+  }
+  const reservasCol = collection(db, COLLECTION, docId(selectedDateKey, selectedTurno), "reservas");
   const myResRef = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno), "reservas", currentUser.saram);
   try{
     await runTransaction(db, async (tx) => {
-      const parentSnap = await tx.get(parentRef);
-      const myResSnap = await tx.get(myResRef);
-      const count = parentSnap.exists() ? (parentSnap.data().count || 0) : 0;
+      const existentesSnap = await tx.get(query(reservasCol));
+      const count = existentesSnap.size;
       const total = totalVagas();
       if(count >= total) throw new Error("ESGOTADO");
       if(count >= VAGAS_GERAL && !currentUser.isPiloto) throw new Error("SOMENTE_PILOTOS");
+      const myResSnap = await tx.get(myResRef);
       if(myResSnap.exists()) throw new Error("JA_RESERVADO");
       tx.set(myResRef, {
         saram: currentUser.saram, posto: currentUser.posto, nome: currentUser.nome,
         isPiloto: !!currentUser.isPiloto, date: selectedDateKey, turno: selectedTurno, ts: Date.now()
       });
-      tx.set(parentRef, { date: selectedDateKey, turno: selectedTurno, count: count + 1 }, { merge: true });
     });
     await setDoc(doc(db, "historico", `${currentUser.saram}_${selectedDateKey}_${selectedTurno}`), {
       saram: currentUser.saram, nome: currentUser.nome, posto: currentUser.posto,
       date: selectedDateKey, turno: selectedTurno, status: "ativo", criadoEm: serverTimestamp()
     });
+    // se a pessoa estava na fila desse turno, não precisa mais — reservou direto
+    deleteDoc(doc(db, COLLECTION, docId(selectedDateKey, selectedTurno), "fila", currentUser.saram)).catch(()=>{});
     showToast("Reserva confirmada.");
   }catch(e){
-    if(e.message === "ESGOTADO") showToast("Turno esgotou agora. Escolha outro horário.");
+    if(e.message === "ESGOTADO") showToast("Turno esgotou agora. Escolha outro horário ou entre na fila de espera.");
     else if(e.message === "SOMENTE_PILOTOS") showToast("As vagas gerais esgotaram. As vagas restantes são exclusivas para pilotos.");
     else if(e.message === "JA_RESERVADO") showToast("Você já está reservado neste turno.");
     else { console.error(e); showToast("Erro ao reservar. Tente novamente."); }
   }
 }
 
-async function cancelarReserva(saram){
-  const parentRef = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno));
-  const resRef = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno), "reservas", saram);
+async function entrarNaFila(){
+  if(!firebaseOk){ showToast("Firebase indisponível no momento."); return; }
+  if(!dentroDaJanela(selectedDateKey, selectedTurno)){
+    showToast("Esse turno ainda não abriu para reserva.");
+    return;
+  }
+  const reservasCol = collection(db, COLLECTION, docId(selectedDateKey, selectedTurno), "reservas");
+  const myResRef = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno), "reservas", currentUser.saram);
+  const myFilaRef = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno), "fila", currentUser.saram);
   try{
     await runTransaction(db, async (tx) => {
-      const parentSnap = await tx.get(parentRef);
+      const existentesSnap = await tx.get(query(reservasCol));
+      if(existentesSnap.size < totalVagas()) throw new Error("TEM_VAGA");
+      const myResSnap = await tx.get(myResRef);
+      if(myResSnap.exists()) throw new Error("JA_RESERVADO");
+      const myFilaSnap = await tx.get(myFilaRef);
+      if(myFilaSnap.exists()) throw new Error("JA_NA_FILA");
+      tx.set(myFilaRef, {
+        saram: currentUser.saram, posto: currentUser.posto, nome: currentUser.nome,
+        isPiloto: !!currentUser.isPiloto, date: selectedDateKey, turno: selectedTurno, ts: Date.now()
+      });
+    });
+    showToast("Você entrou na fila de espera.");
+  }catch(e){
+    if(e.message === "TEM_VAGA") showToast("Tem vaga disponível agora — reserve direto.");
+    else if(e.message === "JA_RESERVADO") showToast("Você já está reservado neste turno.");
+    else if(e.message === "JA_NA_FILA") showToast("Você já está na fila de espera.");
+    else { console.error(e); showToast("Erro ao entrar na fila. Tente novamente."); }
+  }
+}
+
+async function sairDaFila(saram){
+  try{
+    await deleteDoc(doc(db, COLLECTION, docId(selectedDateKey, selectedTurno), "fila", saram));
+    showToast("Removido(a) da fila de espera.");
+  }catch(e){ console.error(e); showToast("Erro ao sair da fila. Tente novamente."); }
+}
+
+async function cancelarReserva(saram){
+  const resRef = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno), "reservas", saram);
+  const reservasCol = collection(db, COLLECTION, docId(selectedDateKey, selectedTurno), "reservas");
+  const filaCol = collection(db, COLLECTION, docId(selectedDateKey, selectedTurno), "fila");
+  try{
+    let promovido = null;
+    await runTransaction(db, async (tx) => {
       const resSnap = await tx.get(resRef);
       if(!resSnap.exists()) return;
-      const count = parentSnap.exists() ? (parentSnap.data().count || 0) : 0;
+      const reservasSnap = await tx.get(query(reservasCol));
+      const filaSnap = await tx.get(query(filaCol, orderBy("ts", "asc"), limit(20)));
+
       tx.delete(resRef);
-      tx.set(parentRef, { date: selectedDateKey, turno: selectedTurno, count: Math.max(0, count - 1) }, { merge: true });
+
+      // tenta promover o primeiro da fila que seja elegível pra vaga que sobrou
+      const countDepois = Math.max(0, reservasSnap.size - 1);
+      const precisaSerPiloto = countDepois >= VAGAS_GERAL;
+      const candidatoDoc = filaSnap.docs.find(d => !precisaSerPiloto || d.data().isPiloto);
+      if(candidatoDoc){
+        const dados = candidatoDoc.data();
+        const novaResRef = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno), "reservas", dados.saram);
+        tx.set(novaResRef, {
+          saram: dados.saram, posto: dados.posto, nome: dados.nome,
+          isPiloto: !!dados.isPiloto, date: selectedDateKey, turno: selectedTurno, ts: Date.now()
+        });
+        tx.delete(candidatoDoc.ref);
+        promovido = dados;
+      }
     });
+
     await updateDoc(doc(db, "historico", `${saram}_${selectedDateKey}_${selectedTurno}`), { status: "cancelado" }).catch(()=>{});
-    showToast("Reserva cancelada.");
+
+    if(promovido){
+      await setDoc(doc(db, "historico", `${promovido.saram}_${selectedDateKey}_${selectedTurno}`), {
+        saram: promovido.saram, nome: promovido.nome, posto: promovido.posto,
+        date: selectedDateKey, turno: selectedTurno, status: "ativo", criadoEm: serverTimestamp()
+      });
+      await addDoc(collection(db, "notificacoes"), {
+        saram: promovido.saram,
+        mensagem: `Uma vaga abriu no turno ${selectedTurno} de ${fmtDatePt(new Date(selectedDateKey+"T00:00:00"))} e você foi promovido(a) automaticamente da fila de espera. Já está reservado(a)!`,
+        lida: false,
+        criadoEm: serverTimestamp(),
+      });
+    }
+
+    showToast("Reserva cancelada." + (promovido ? " Alguém da fila foi promovido(a)." : ""));
   }catch(e){ console.error(e); showToast("Erro ao cancelar. Tente novamente."); }
 }
 
 document.getElementById("btnFechar").onclick = () => document.getElementById("overlay").classList.remove("open");
 document.getElementById("overlay").onclick = (e) => { if(e.target.id === "overlay") document.getElementById("overlay").classList.remove("open"); };
 document.getElementById("btnReservar").onclick = reservar;
+document.getElementById("btnEntrarFila").onclick = entrarNaFila;
+document.getElementById("btnSairFila").onclick = () => sairDaFila(currentUser.saram);
 
 /* =======================================================================
    MEUS ACESSOS
@@ -1154,6 +1325,46 @@ document.getElementById("btnSalvarVagas").onclick = async () => {
   await setDoc(doc(db, "config", "vagas"), { geral, pilotos, atualizadoEm: serverTimestamp() });
   showToast("Configuração de vagas salva.");
 };
+
+/* =======================================================================
+   NOTIFICAÇÕES
+   ======================================================================= */
+let unsubscribeNotificacoes = null;
+function initNotificacoesWatch(){
+  if(unsubscribeNotificacoes){ unsubscribeNotificacoes(); unsubscribeNotificacoes = null; }
+  const q = query(collection(db, "notificacoes"), where("saram", "==", currentUser.saram), orderBy("criadoEm", "desc"));
+  unsubscribeNotificacoes = onSnapshot(q, (snap) => {
+    notificacoesList = [];
+    snap.forEach(d => notificacoesList.push({ id: d.id, ...d.data() }));
+    const naoLidas = notificacoesList.filter(n => !n.lida).length;
+    const badge = document.getElementById("notifBadge");
+    badge.textContent = naoLidas;
+    badge.classList.toggle("hidden", naoLidas === 0);
+    if(document.getElementById("notifOverlay").classList.contains("open")) renderNotifList();
+  }, (err) => console.error(err));
+}
+
+function renderNotifList(){
+  const list = document.getElementById("notifList");
+  if(notificacoesList.length === 0){
+    list.innerHTML = `<div class="empty-state">Nenhuma notificação ainda.</div>`;
+    return;
+  }
+  list.innerHTML = notificacoesList.map(n => `
+    <div class="list-card" style="margin-bottom:8px;">
+      <div class="body" style="margin-top:0;">${n.mensagem}</div>
+      <div class="meta" style="margin-top:6px;">${n.criadoEm?.toDate ? n.criadoEm.toDate().toLocaleString("pt-BR") : "agora"}</div>
+    </div>`).join("");
+}
+
+document.getElementById("btnNotificacoes").onclick = () => {
+  document.getElementById("notifOverlay").classList.add("open");
+  renderNotifList();
+  notificacoesList.filter(n => !n.lida).forEach(n => {
+    updateDoc(doc(db, "notificacoes", n.id), { lida: true }).catch(() => {});
+  });
+};
+document.getElementById("btnFecharNotif").onclick = () => document.getElementById("notifOverlay").classList.remove("open");
 
 /* =======================================================================
    PRESTAÇÃO DE CONTAS

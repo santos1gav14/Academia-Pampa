@@ -73,33 +73,44 @@ service cloud.firestore {
     }
 
     // ---- reservas_academia/{dateKey_turno} ----
-    // Documento "pai" de cada turno: só guarda date/turno/count (a contagem
-    // de reservas). count só pode se mover em passos de exatamente ±1 por
-    // escrita, e nenhum outro campo pode ser tocado — fecha a possibilidade
-    // de alguém forjar uma contagem qualquer para burlar a capacidade.
-    // Quem está reservado em cada turno vive na subcoleção "reservas" logo
-    // abaixo, um documento por pessoa.
+    // O documento "pai" de cada turno não guarda mais nenhuma contagem —
+    // o app checa a capacidade direto na subcoleção "reservas" dentro da
+    // própria transação (tx.get de uma query), então esse documento pai
+    // nem precisa existir. Só é lido (nunca escrito) por segurança.
     match /reservas_academia/{turnoId} {
       allow read: if isApproved();
-      allow create: if isApproved()
-        && request.resource.data.keys().hasOnly(['date','turno','count'])
-        && request.resource.data.count == 1;
-      allow update: if isApproved()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['count'])
-        && request.resource.data.count is int
-        && request.resource.data.count >= 0
-        && (request.resource.data.count == resource.data.count + 1
-            || request.resource.data.count == resource.data.count - 1);
-      allow delete: if isAdmin();
 
       // ---- reservas_academia/{dateKey_turno}/reservas/{saram} ----
       // Uma reserva = um documento, dono é quem tem o SARAM do ID do
-      // documento. Só o próprio dono cria a própria reserva (não dá para
-      // criar reserva em nome de outra pessoa); só o dono ou um admin
-      // cancela (apaga); ninguém pode editar uma reserva já existente —
-      // isso é o que fecha a brecha de alguém adulterar o cadastro de
-      // outra pessoa dentro da lista do turno.
+      // documento. Ninguém pode editar uma reserva já existente (update
+      // sempre falso) e só o dono ou um admin cancela (apaga) — isso é
+      // o que impede alguém de adulterar a reserva de outra pessoa.
+      //
+      // A criação é uma exceção pensada: além do próprio dono se
+      // reservar, quando alguém cancela e existe fila de espera, o app
+      // promove automaticamente o primeiro elegível — criando a reserva
+      // dele dentro da MESMA transação de quem cancelou, não da pessoa
+      // promovida. Por isso `create` aqui não exige saram==mySaram().
+      // O trade-off aceito: um usuário aprovado poderia, forçando a mão,
+      // criar uma reserva "em nome" de outra pessoa sem passar pela fila.
+      // Não é escalada de privilégio nem acesso a dado sensível (o roster
+      // já é público entre aprovados) e é facilmente corrigível por um
+      // admin apagando a reserva indevida — por isso ficou assim em vez
+      // de travar mais (o que exigiria Cloud Functions, que esse projeto
+      // não usa hoje).
       match /reservas/{saram} {
+        allow read: if isApproved();
+        allow create: if isApproved() && request.resource.data.saram == saram;
+        allow delete: if isApproved() && (saram == mySaram() || isAdmin());
+        allow update: if false;
+      }
+
+      // ---- reservas_academia/{dateKey_turno}/fila/{saram} ----
+      // Fila de espera: aqui sim, só o próprio dono entra na fila (você
+      // não pode colocar outra pessoa na fila por ela). Sair da fila é
+      // você mesmo ou um admin. A promoção (criar a reserva de quem
+      // estava na fila) acontece na regra de "reservas" acima, não aqui.
+      match /fila/{saram} {
         allow read: if isApproved();
         allow create: if isApproved()
           && saram == mySaram()
@@ -110,12 +121,14 @@ service cloud.firestore {
     }
 
     // ---- historico/{saram_dateKey_turno} ----
-    // Cada usuário só lê e cancela (atualiza) o próprio histórico; admin lê
-    // e cancela o de qualquer um (usado ao cancelar reserva de outra pessoa).
+    // Cada usuário só lê o próprio histórico; admin lê o de qualquer um.
+    // create/update ficam abertos a qualquer aprovado (mesmo trade-off do
+    // "reservas" acima: quando alguém é promovido da fila de espera, é
+    // quem cancelou que grava o histórico da pessoa promovida — não ela
+    // mesma). É só um registro informativo, não controla acesso a nada.
     match /historico/{docId} {
       allow read: if isApproved() && (resource.data.saram == mySaram() || isAdmin());
-      allow create: if isApproved() && request.resource.data.saram == mySaram();
-      allow update: if isApproved() && (resource.data.saram == mySaram() || isAdmin());
+      allow create, update: if isApproved();
       allow delete: if isAdmin();
     }
 
@@ -130,6 +143,17 @@ service cloud.firestore {
     match /avisos_lidos/{id} {
       allow read: if isApproved() && resource.data.saram == mySaram();
       allow create, update: if isApproved() && request.resource.data.saram == mySaram();
+    }
+
+    // ---- notificacoes/{id} ----
+    // Cada usuário só lê e marca como lida a própria notificação. Criar é
+    // liberado a qualquer aprovado, porque quem gera a notificação (ex:
+    // "você foi promovido da fila") é sempre outra pessoa (quem cancelou
+    // a reserva), não a destinatária.
+    match /notificacoes/{id} {
+      allow read: if isApproved() && resource.data.saram == mySaram();
+      allow create: if isApproved();
+      allow update: if isApproved() && resource.data.saram == mySaram();
     }
 
     // ---- financas/{id} (prestação de contas) ----

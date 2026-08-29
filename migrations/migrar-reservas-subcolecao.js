@@ -61,7 +61,6 @@ async function migrar() {
     }
 
     batch.update(docSnap.ref, {
-      count: validas,
       lista: admin.firestore.FieldValue.delete(),
     });
 
