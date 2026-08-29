@@ -602,10 +602,19 @@ function turnoInicio(dateKey, turno){
   d.setHours(parseInt(m[1], 10), parseInt(m[2], 10), 0, 0);
   return d;
 }
+function turnoFim(dateKey, turno){
+  return turnoInicio(dateKey, turno).getTime() + 60 * 60 * 1000; // todo turno dura 1h
+}
+function turnoEncerrado(dateKey, turno){
+  return turnoFim(dateKey, turno) <= Date.now();
+}
 function dentroDaJanela(dateKey, turno){
   const inicio = turnoInicio(dateKey, turno).getTime();
+  const fim = turnoFim(dateKey, turno);
   const agora = Date.now();
-  return inicio >= agora && (inicio - agora) <= janelaMs();
+  // o turno em andamento continua reservável até o minuto em que termina,
+  // não só até o minuto em que começa
+  return fim > agora && (inicio - agora) <= janelaMs();
 }
 function fmtAbertura(dateKey, turno){
   const abre = new Date(turnoInicio(dateKey, turno).getTime() - janelaMs());
@@ -884,6 +893,7 @@ function renderTurnoList(){
     let statusLabel = "DISPONÍVEL";
     if(mine) statusLabel = "VOCÊ ESTÁ AQUI";
     else if(full) statusLabel = "ESGOTADO";
+    else if(turnoEncerrado(selectedDateKey, turno)) statusLabel = "ENCERRADO";
     else if(!aberto) statusLabel = "ABRE " + fmtAbertura(selectedDateKey, turno);
     else if(bloqueadoPraMim) statusLabel = "SÓ PILOTOS";
 
@@ -1006,6 +1016,8 @@ function refreshSheetRoster(){
 
   if(jaReservado){
     banner.innerHTML = `<div class="info-banner">Você já está reservado neste turno.</div>`;
+  }else if(turnoEncerrado(selectedDateKey, selectedTurno)){
+    banner.innerHTML = `<div class="info-banner">Esse turno já terminou.</div>`;
   }else if(!aberto){
     banner.innerHTML = `<div class="info-banner">Esse turno só abre para reserva a partir de ${fmtAbertura(selectedDateKey, selectedTurno)} (até ${JANELA_HORAS}h de antecedência).</div>`;
   }else if(jaNaFila){
@@ -1032,7 +1044,9 @@ async function reservar(){
     return;
   }
   if(!dentroDaJanela(selectedDateKey, selectedTurno)){
-    showToast(`Esse turno só abre para reserva com até ${JANELA_HORAS}h de antecedência.`);
+    showToast(turnoEncerrado(selectedDateKey, selectedTurno)
+      ? "Esse turno já terminou."
+      : `Esse turno só abre para reserva com até ${JANELA_HORAS}h de antecedência.`);
     return;
   }
   const reservasCol = collection(db, COLLECTION, docId(selectedDateKey, selectedTurno), "reservas");
