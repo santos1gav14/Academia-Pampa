@@ -890,10 +890,11 @@ function renderTurnoList(){
       const zonaPiloto = i >= VAGAS_GERAL;
       ticks += `<div class="tick ${on?"on":""} ${zonaPiloto?"piloto":""} ${on&&full?"full":""}"></div>`;
     }
+    const encerrado = turnoEncerrado(selectedDateKey, turno);
     let statusLabel = "DISPONÍVEL";
     if(mine) statusLabel = "VOCÊ ESTÁ AQUI";
     else if(full) statusLabel = "ESGOTADO";
-    else if(turnoEncerrado(selectedDateKey, turno)) statusLabel = "ENCERRADO";
+    else if(encerrado) statusLabel = "ENCERRADO";
     else if(!aberto) statusLabel = "ABRE " + fmtAbertura(selectedDateKey, turno);
     else if(bloqueadoPraMim) statusLabel = "SÓ PILOTOS";
 
@@ -902,7 +903,7 @@ function renderTurnoList(){
       <div class="gauge">${ticks}</div>
       <div class="turno-status">
         <div class="count ${full?"full":""}">${count}/${total}</div>
-        <div class="status-label ${(full||bloqueadoPraMim)?"full":"ok"}">${statusLabel}</div>
+        <div class="status-label ${(!mine && (full||bloqueadoPraMim||encerrado))?"full":"ok"}">${statusLabel}</div>
       </div>`;
     list.appendChild(card);
   });
