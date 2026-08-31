@@ -1,19 +1,16 @@
-// Função serverless (Vercel) que permite a um usuário redefinir a própria
-// senha sozinho, sem precisar de um admin — confirmando SARAM + telefone
-// cadastrado. Roda fora do navegador porque só quem tem a chave de conta de
+// Função serverless (Vercel) chamada pela aba "Admin > Senha" do app quando
+// um admin decide resetar a senha de alguém que pediu ("esqueci minha
+// senha"). Roda fora do navegador porque só quem tem a chave de conta de
 // serviço do Firebase (guardada aqui como variável de ambiente, nunca no
-// código) tem permissão pra mudar a senha de outra pessoa.
+// código) tem permissão pra mudar a senha de outra pessoa — o Firestore
+// (onde fica o pedido) não tem essa autoridade.
 //
-// Decisões de segurança, de propósito:
-// - Contas de admin NUNCA passam por aqui (ver checagem abaixo) — pra essas,
-//   o reset continua exigindo o script rodado por outro admin
-//   (scripts/resetar-senha.js). Assim, mesmo que alguém descubra o telefone
-//   de um colega, não consegue virar admin do sistema.
-// - Limite de 5 tentativas por SARAM a cada 15 minutos, guardado no
-//   Firestore, pra dificultar tentativa de adivinhar o telefone de outra
-//   pessoa por força bruta.
-// - O telefone armazenado nunca é devolvido pro cliente — só comparado
-//   internamente.
+// Segurança: quem chama essa função precisa mandar o próprio idToken do
+// Firebase Auth (obtido no navegador com auth.currentUser.getIdToken()).
+// A função verifica esse token com o Admin SDK — não dá pra forjar — e só
+// segue adiante se a conta correspondente estiver marcada como isAdmin no
+// Firestore. Ou seja: só um admin de verdade, já logado no app, consegue
+// resetar a senha de alguém por aqui.
 
 const admin = require("firebase-admin");
 
@@ -28,11 +25,9 @@ function getApp() {
 
 const EMAIL_DOMAIN = "@academiapampa.local";
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "*";
-const LIMITE_TENTATIVAS = 5;
-const JANELA_TENTATIVAS_MS = 15 * 60 * 1000;
 
-function apenasDigitos(s) {
-  return String(s || "").replace(/\D/g, "");
+function saramParaEmail(saram) {
+  return String(saram).trim().toLowerCase().replace(/\s+/g, "") + EMAIL_DOMAIN;
 }
 
 module.exports = async function handler(req, res) {
@@ -51,55 +46,45 @@ module.exports = async function handler(req, res) {
 
   try {
     getApp();
-    const { saram, telefone, novaSenha } = req.body || {};
+    const { saram, novaSenha, idToken } = req.body || {};
 
-    if (!saram || !telefone || !novaSenha) {
-      res.status(400).json({ erro: "Preencha SARAM, telefone e a nova senha." });
+    if (!saram || !novaSenha || !idToken) {
+      res.status(400).json({ erro: "Faltam dados na requisição." });
       return;
     }
     if (String(novaSenha).length < 6) {
-      res.status(400).json({ erro: "A nova senha precisa ter pelo menos 6 caracteres." });
+      res.status(400).json({ erro: "A senha temporária precisa ter pelo menos 6 caracteres." });
       return;
     }
 
-    const saramLimpo = String(saram).trim();
+    // 1. Confirma que quem está chamando é um usuário autenticado de verdade
+    let tokenDecodificado;
+    try {
+      tokenDecodificado = await admin.auth().verifyIdToken(idToken);
+    } catch (e) {
+      res.status(401).json({ erro: "Sessão inválida. Faça login de novo e tente outra vez." });
+      return;
+    }
+
+    // 2. Confirma que essa pessoa é admin (checando o próprio cadastro dela no Firestore)
+    const solicitanteSaram = tokenDecodificado.email.replace(EMAIL_DOMAIN, "");
     const db = admin.firestore();
-
-    // limite básico de tentativas por SARAM
-    const tentativasRef = db.collection("reset_tentativas").doc(saramLimpo);
-    const agora = Date.now();
-    const tentativasSnap = await tentativasRef.get();
-    const tentativasAnteriores = tentativasSnap.exists ? (tentativasSnap.data().tentativas || []) : [];
-    const recentes = tentativasAnteriores.filter((ts) => agora - ts < JANELA_TENTATIVAS_MS);
-    if (recentes.length >= LIMITE_TENTATIVAS) {
-      res.status(429).json({ erro: "Muitas tentativas. Aguarde alguns minutos e tente de novo, ou peça a um admin." });
+    const solicitanteSnap = await db.collection("usuarios").doc(solicitanteSaram).get();
+    if (!solicitanteSnap.exists || solicitanteSnap.data().isAdmin !== true) {
+      res.status(403).json({ erro: "Só administradores podem resetar senha de outra pessoa." });
       return;
     }
-    await tentativasRef.set({ tentativas: [...recentes, agora] });
 
-    const usuarioRef = db.collection("usuarios").doc(saramLimpo);
-    const usuarioSnap = await usuarioRef.get();
-    if (!usuarioSnap.exists) {
+    // 3. Confirma que o SARAM alvo existe e troca a senha
+    const saramLimpo = String(saram).trim();
+    const alvoSnap = await db.collection("usuarios").doc(saramLimpo).get();
+    if (!alvoSnap.exists) {
       res.status(404).json({ erro: "SARAM não encontrado." });
       return;
     }
-    const usuario = usuarioSnap.data();
 
-    if (usuario.isAdmin) {
-      res.status(403).json({ erro: "Contas de administrador não podem ser redefinidas por aqui. Peça a outro admin para usar o script de reset." });
-      return;
-    }
-
-    if (apenasDigitos(usuario.telefone) !== apenasDigitos(telefone)) {
-      res.status(401).json({ erro: "Telefone não confere com o cadastro." });
-      return;
-    }
-
-    const email = saramLimpo.toLowerCase().replace(/\s+/g, "") + EMAIL_DOMAIN;
-    const authUser = await admin.auth().getUserByEmail(email);
+    const authUser = await admin.auth().getUserByEmail(saramParaEmail(saramLimpo));
     await admin.auth().updateUser(authUser.uid, { password: String(novaSenha) });
-
-    await tentativasRef.delete().catch(() => {});
 
     res.status(200).json({ ok: true });
   } catch (e) {

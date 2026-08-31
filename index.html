@@ -270,7 +270,7 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
 
       <!-- ESQUECI MINHA SENHA -->
       <div id="formEsqueciSenha" class="hidden">
-        <div class="info-banner" style="margin-bottom:14px;">Confirme seu SARAM e o telefone que está no seu cadastro pra definir uma senha nova. Contas de admin não podem ser redefinidas por aqui — fale com outro admin.</div>
+        <div class="info-banner" style="margin-bottom:14px;">Informe seu SARAM e telefone. Um admin vai conferir seu cadastro e liberar uma senha nova pra você — não é na hora.</div>
         <div class="form-row">
           <label>SARAM</label>
           <input type="text" id="esqSaram" placeholder="Ex.: 1234567" inputmode="numeric">
@@ -279,15 +279,7 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
           <label>Telefone cadastrado</label>
           <input type="text" id="esqTelefone" placeholder="Ex.: (55) 99999-9999" inputmode="tel">
         </div>
-        <div class="form-row">
-          <label>Nova senha (mín. 6 caracteres)</label>
-          <input type="password" id="esqNovaSenha" placeholder="••••••••">
-        </div>
-        <div class="form-row">
-          <label>Confirmar nova senha</label>
-          <input type="password" id="esqNovaSenha2" placeholder="••••••••">
-        </div>
-        <button class="btn btn-primary" id="btnEsqueciSenha">Definir nova senha</button>
+        <button class="btn btn-primary" id="btnEsqueciSenha">Pedir redefinição de senha</button>
         <button class="btn btn-ghost" id="btnVoltarLogin">Voltar para o login</button>
       </div>
 
@@ -444,6 +436,7 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
         <div class="subnav-btn" data-sub="usuarios">Usuários</div>
         <div class="subnav-btn" data-sub="pagamentos">Pagamentos</div>
         <div class="subnav-btn" data-sub="vagas">Vagas</div>
+        <div class="subnav-btn" data-sub="senha" id="subnavSenhaBtn">Senha</div>
         <div class="subnav-btn" data-sub="avisos">Avisos</div>
       </div>
 
@@ -514,6 +507,11 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
             <button class="btn btn-primary" id="btnSalvarVagas">Salvar configuração de vagas</button>
           </div>
         </div>
+      </div>
+
+      <div id="adminSenha" class="hidden">
+        <div class="section-title" style="padding-top:2px;">Pedidos de redefinição de senha</div>
+        <div class="card-list" id="senhaPedidosList"></div>
       </div>
 
       <div id="adminAvisos" class="hidden">
@@ -750,51 +748,32 @@ document.getElementById("linkEsqueciSenha").onclick = () => {
   document.getElementById("formEsqueciSenha").classList.remove("hidden");
   document.getElementById("esqSaram").value = document.getElementById("loginSaram").value;
   document.getElementById("esqTelefone").value = "";
-  document.getElementById("esqNovaSenha").value = "";
-  document.getElementById("esqNovaSenha2").value = "";
   hideAuthError();
 };
 document.getElementById("btnVoltarLogin").onclick = () => switchAuthTab("login");
 
 document.getElementById("btnEsqueciSenha").onclick = async () => {
   hideAuthError();
-  if(RESET_SENHA_API_URL.startsWith("COLE_AQUI")){
-    showAuthError("Essa função ainda não foi configurada. Fale com um admin.");
-    return;
-  }
   const saram = document.getElementById("esqSaram").value.trim();
   const telefone = document.getElementById("esqTelefone").value.trim();
-  const novaSenha = document.getElementById("esqNovaSenha").value;
-  const novaSenha2 = document.getElementById("esqNovaSenha2").value;
-
   if(!saram || !telefone){ showAuthError("Preencha SARAM e telefone."); return; }
-  if(novaSenha.length < 6){ showAuthError("A nova senha precisa ter pelo menos 6 caracteres."); return; }
-  if(novaSenha !== novaSenha2){ showAuthError("As senhas não coincidem."); return; }
 
   const btn = document.getElementById("btnEsqueciSenha");
   btn.disabled = true;
-  btn.textContent = "Verificando...";
+  btn.textContent = "Enviando...";
   try{
-    const resp = await fetch(RESET_SENHA_API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ saram, telefone, novaSenha }),
+    await addDoc(collection(db, "solicitacoes_senha"), {
+      saram, telefoneInformado: telefone, status: "pendente", criadoEm: serverTimestamp(),
     });
-    const data = await resp.json().catch(() => ({}));
-    if(!resp.ok){
-      showAuthError(data.erro || "Não foi possível redefinir a senha.");
-      return;
-    }
     switchAuthTab("login");
     document.getElementById("loginSaram").value = saram;
-    document.getElementById("loginSenha").value = "";
-    showToast("Senha redefinida! Já pode entrar com a senha nova.");
+    showToast("Pedido enviado! Um admin vai liberar sua senha nova em breve.");
   }catch(e){
     console.error(e);
-    showAuthError("Erro de conexão. Tente novamente.");
+    showAuthError("Erro ao enviar o pedido. Tente novamente.");
   }finally{
     btn.disabled = false;
-    btn.textContent = "Definir nova senha";
+    btn.textContent = "Pedir redefinição de senha";
   }
 };
 
@@ -867,6 +846,7 @@ async function handleAuthedUser(user, retriesLeft){
   unsubscribeReservas.forEach(fn=>fn());
   unsubscribeReservas = [];
   if(unsubscribeNotificacoes){ unsubscribeNotificacoes(); unsubscribeNotificacoes = null; }
+  if(unsubscribeSolicitacoesSenha){ unsubscribeSolicitacoesSenha(); unsubscribeSolicitacoesSenha = null; }
   if(!user){
     currentUser = null;
     showScreen("screenAuth");
@@ -899,6 +879,7 @@ async function handleAuthedUser(user, retriesLeft){
   initAvisosWatch();
   initVagasConfigWatch();
   initNotificacoesWatch();
+  initSolicitacoesSenhaWatch();
   switchTab("agendar");
   const today = new Date(); today.setHours(0,0,0,0);
   selecionarDia(dateKey(today));
@@ -931,12 +912,13 @@ document.querySelectorAll(".subnav-btn").forEach(btn=>{
     document.querySelectorAll(".subnav-btn").forEach(b=>b.classList.remove("active"));
     btn.classList.add("active");
     const sub = btn.dataset.sub;
-    ["Pendentes","Usuarios","Pagamentos","Vagas","Avisos"].forEach(s=>{
+    ["Pendentes","Usuarios","Pagamentos","Vagas","Senha","Avisos"].forEach(s=>{
       document.getElementById("admin"+s).classList.toggle("hidden", s.toLowerCase()!==sub);
     });
     if(sub==="usuarios") renderUsuariosList();
     if(sub==="pagamentos") { renderPagamentosList(); carregarPixConfig(); }
     if(sub==="vagas") populateVagasForm();
+    if(sub==="senha") renderSenhaPedidosList();
     if(sub==="avisos") renderAvisosAdminList();
   };
 });
@@ -1454,6 +1436,102 @@ document.getElementById("btnSalvarVagas").onclick = async () => {
   await setDoc(doc(db, "config", "vagas"), { geral, pilotos, horasJanela, atualizadoEm: serverTimestamp() });
   showToast("Configuração de vagas salva.");
 };
+
+/* =======================================================================
+   PEDIDOS DE REDEFINIÇÃO DE SENHA (Admin > Senha)
+   ======================================================================= */
+function gerarSenhaTemp(){
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  let s = "";
+  for(let i=0;i<8;i++) s += chars[Math.floor(Math.random()*chars.length)];
+  return s;
+}
+
+let unsubscribeSolicitacoesSenha = null;
+function initSolicitacoesSenhaWatch(){
+  if(unsubscribeSolicitacoesSenha){ unsubscribeSolicitacoesSenha(); unsubscribeSolicitacoesSenha = null; }
+  if(!currentUser?.isAdmin) return;
+  unsubscribeSolicitacoesSenha = onSnapshot(
+    query(collection(db, "solicitacoes_senha"), where("status", "==", "pendente")),
+    (snap) => {
+      const btn = document.getElementById("subnavSenhaBtn");
+      if(btn) btn.textContent = snap.size > 0 ? `Senha (${snap.size})` : "Senha";
+    },
+    (err) => console.error(err)
+  );
+}
+
+async function renderSenhaPedidosList(){
+  const list = document.getElementById("senhaPedidosList");
+  list.innerHTML = `<div class="empty-state">Carregando...</div>`;
+  const snap = await getDocs(query(collection(db, "solicitacoes_senha"), where("status", "==", "pendente")));
+  if(snap.empty){ list.innerHTML = `<div class="empty-state">Nenhum pedido pendente.</div>`; return; }
+
+  const pedidos = [];
+  snap.forEach(d => pedidos.push({ id: d.id, ...d.data() }));
+  pedidos.sort((a, b) => (b.criadoEm?.toMillis?.() || 0) - (a.criadoEm?.toMillis?.() || 0));
+
+  list.innerHTML = pedidos.map(p => `
+    <div class="list-card">
+      <div class="row1"><div class="title">SARAM ${esc(p.saram)}</div><span class="tag tag-pendente">Pendente</span></div>
+      <div class="meta">Telefone informado: ${esc(p.telefoneInformado)} — confira com o cadastro em Usuários antes de resetar.</div>
+      <div class="form-row" style="margin-top:10px;">
+        <label>Senha temporária pra passar pra pessoa</label>
+        <input type="text" id="senhaTemp-${p.id}" value="${esc(gerarSenhaTemp())}">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-good btn-sm" style="flex:1;" data-act="resetar" data-id="${p.id}" data-saram="${p.saram}">Resetar senha</button>
+        <button class="btn btn-ghost btn-sm" style="flex:1;" data-act="ignorar" data-id="${p.id}">Ignorar pedido</button>
+      </div>
+    </div>`).join("");
+
+  list.querySelectorAll("button[data-act]").forEach(btn => {
+    btn.onclick = async () => {
+      const id = btn.dataset.id;
+
+      if(btn.dataset.act === "ignorar"){
+        if(!confirm("Remover este pedido sem resetar a senha?")) return;
+        await deleteDoc(doc(db, "solicitacoes_senha", id));
+        renderSenhaPedidosList();
+        return;
+      }
+
+      if(RESET_SENHA_API_URL.startsWith("COLE_AQUI")){
+        showToast("A função de reset ainda não foi configurada na Vercel.");
+        return;
+      }
+      const saram = btn.dataset.saram;
+      const novaSenha = document.getElementById(`senhaTemp-${id}`).value.trim();
+      if(novaSenha.length < 6){ showToast("A senha temporária precisa ter pelo menos 6 caracteres."); return; }
+
+      btn.disabled = true;
+      btn.textContent = "Resetando...";
+      try{
+        const idToken = await auth.currentUser.getIdToken();
+        const resp = await fetch(RESET_SENHA_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ saram, novaSenha, idToken }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if(!resp.ok){
+          showToast(data.erro || "Erro ao resetar a senha.");
+          btn.disabled = false;
+          btn.textContent = "Resetar senha";
+          return;
+        }
+        await deleteDoc(doc(db, "solicitacoes_senha", id));
+        showToast(`Senha de ${saram} redefinida para: ${novaSenha} — repasse pra pessoa.`);
+        renderSenhaPedidosList();
+      }catch(e){
+        console.error(e);
+        showToast("Erro de conexão ao resetar.");
+        btn.disabled = false;
+        btn.textContent = "Resetar senha";
+      }
+    };
+  });
+}
 
 /* =======================================================================
    NOTIFICAÇÕES

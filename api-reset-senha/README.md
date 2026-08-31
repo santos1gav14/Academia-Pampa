@@ -1,11 +1,26 @@
 # api-reset-senha
 
-Serverzinho gratuito (Vercel) que permite qualquer usuário (menos admins)
-redefinir a própria senha sozinho, confirmando SARAM + telefone cadastrado.
-Existe porque o Firestore (onde ficam os dados do app) não tem nenhuma
-autoridade pra mudar senha do Firebase Authentication — só uma chave
-privilegiada consegue, e essa chave não pode ficar exposta no navegador.
-Aqui ela fica guardada em segredo, do lado do servidor.
+Serverzinho gratuito (Vercel) que troca a senha de um usuário quando um
+**admin** decide isso pela aba **Admin > Senha** do app. Existe porque o
+Firestore (onde ficam os dados do app) não tem nenhuma autoridade pra mudar
+senha do Firebase Authentication — só uma chave privilegiada consegue, e
+essa chave não pode ficar exposta no navegador. Aqui ela fica guardada em
+segredo, do lado do servidor.
+
+## Como funciona o fluxo completo
+
+1. Usuário esquece a senha → clica em "Esqueci minha senha" na tela de
+   login → informa SARAM e telefone → isso cria um pedido pendente
+   (guardado direto no Firestore, sem precisar desta função).
+2. Um admin abre **Admin > Senha** no app, vê a lista de pedidos, confere o
+   telefone informado contra o cadastro real (aba Usuários) e decide se
+   reseta.
+3. Ao clicar em "Resetar senha", o app chama esta função, mandando o
+   próprio login do admin (idToken) + o SARAM da pessoa + uma senha
+   temporária. A função confirma que quem está pedindo é mesmo um admin
+   logado, e só então troca a senha.
+4. O admin repassa a senha temporária pra pessoa por fora do app. Ela entra
+   e troca pela definitiva em **🔑 Trocar senha**.
 
 ## Deploy (uma vez só)
 
@@ -38,21 +53,18 @@ Aqui ela fica guardada em segredo, do lado do servidor.
    ```
 8. Salve, comite e publique o `index.html` (do jeito que você já faz hoje).
 
-Depois disso, o link **"Esqueci minha senha"** na tela de login passa a
+Depois disso, o botão "Resetar senha" na aba Admin > Senha passa a
 funcionar de verdade.
 
 ## Segurança — o que essa função garante
 
-- **Contas de admin nunca podem ser redefinidas por aqui.** Se o SARAM
-  informado pertence a um admin, a função recusa — o reset de admin
-  continua exigindo o script `scripts/resetar-senha.js`, rodado por outro
-  admin.
-- **Limite de tentativas**: no máximo 5 tentativas por SARAM a cada 15
-  minutos, guardado num documento em `reset_tentativas/{saram}` no
-  Firestore — dificulta tentar adivinhar o telefone de outra pessoa.
-- **O telefone cadastrado nunca é devolvido pro navegador** — a função só
-  confirma internamente se bate ou não.
-- Ainda assim, telefone não é uma senha secreta de verdade — colegas que já
-  têm seu contato salvo tecnicamente poderiam tentar usar isso. Pra um app
-  fechado de esquadrão o risco é aceitável, mas é bom que você e os demais
-  admins saibam desse trade-off.
+- **Só admin consegue chamar esta função.** Ela verifica o idToken do
+  Firebase Auth de quem está chamando (não dá pra forjar) e confere no
+  Firestore se essa conta tem `isAdmin: true` antes de fazer qualquer
+  coisa.
+- **Quem confere se a pessoa é realmente quem diz ser é o admin humano**,
+  olhando o telefone informado no pedido contra o cadastro real na aba
+  Usuários — a função não faz essa checagem sozinha, é uma decisão
+  consciente do admin.
+- Pedidos de reset ficam em `solicitacoes_senha` no Firestore, visível só
+  para admins.
