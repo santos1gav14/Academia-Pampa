@@ -10,11 +10,11 @@ segredo, do lado do servidor.
 ## Como funciona o fluxo completo
 
 1. Usuário esquece a senha → clica em "Esqueci minha senha" na tela de
-   login → informa SARAM e telefone → isso cria um pedido pendente
-   (guardado direto no Firestore, sem precisar desta função).
-2. Um admin abre **Admin > Senha** no app, vê a lista de pedidos, confere o
-   telefone informado contra o cadastro real (aba Usuários) e decide se
-   reseta.
+   login → informa o SARAM → isso cria um pedido pendente (guardado direto
+   no Firestore, sem precisar desta função).
+2. Um admin abre **Admin > Senha** no app, vê a lista de pedidos, confere
+   (por fora do app, se achar necessário) que quem pediu é mesmo essa
+   pessoa, e decide se reseta.
 3. Ao clicar em "Resetar senha", o app chama esta função, mandando o
    próprio login do admin (idToken) + o SARAM da pessoa + uma senha
    temporária. A função confirma que quem está pedindo é mesmo um admin
@@ -62,9 +62,8 @@ funcionar de verdade.
   Firebase Auth de quem está chamando (não dá pra forjar) e confere no
   Firestore se essa conta tem `isAdmin: true` antes de fazer qualquer
   coisa.
-- **Quem confere se a pessoa é realmente quem diz ser é o admin humano**,
-  olhando o telefone informado no pedido contra o cadastro real na aba
-  Usuários — a função não faz essa checagem sozinha, é uma decisão
-  consciente do admin.
+- **Quem confere se a pessoa é realmente quem diz ser é o admin humano** —
+  a função não faz nenhuma checagem de identidade sozinha, é uma decisão
+  consciente de quem está resetando.
 - Pedidos de reset ficam em `solicitacoes_senha` no Firestore, visível só
   para admins.

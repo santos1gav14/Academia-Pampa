@@ -270,14 +270,10 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
 
       <!-- ESQUECI MINHA SENHA -->
       <div id="formEsqueciSenha" class="hidden">
-        <div class="info-banner" style="margin-bottom:14px;">Informe seu SARAM e telefone. Um admin vai conferir seu cadastro e liberar uma senha nova pra você — não é na hora.</div>
+        <div class="info-banner" style="margin-bottom:14px;">Informe seu SARAM. Um admin vai liberar uma senha nova pra você — não é na hora.</div>
         <div class="form-row">
           <label>SARAM</label>
           <input type="text" id="esqSaram" placeholder="Ex.: 1234567" inputmode="numeric">
-        </div>
-        <div class="form-row">
-          <label>Telefone cadastrado</label>
-          <input type="text" id="esqTelefone" placeholder="Ex.: (55) 99999-9999" inputmode="tel">
         </div>
         <button class="btn btn-primary" id="btnEsqueciSenha">Pedir redefinição de senha</button>
         <button class="btn btn-ghost" id="btnVoltarLogin">Voltar para o login</button>
@@ -747,7 +743,6 @@ document.getElementById("linkEsqueciSenha").onclick = () => {
   document.getElementById("formCadastro").classList.add("hidden");
   document.getElementById("formEsqueciSenha").classList.remove("hidden");
   document.getElementById("esqSaram").value = document.getElementById("loginSaram").value;
-  document.getElementById("esqTelefone").value = "";
   hideAuthError();
 };
 document.getElementById("btnVoltarLogin").onclick = () => switchAuthTab("login");
@@ -755,15 +750,14 @@ document.getElementById("btnVoltarLogin").onclick = () => switchAuthTab("login")
 document.getElementById("btnEsqueciSenha").onclick = async () => {
   hideAuthError();
   const saram = document.getElementById("esqSaram").value.trim();
-  const telefone = document.getElementById("esqTelefone").value.trim();
-  if(!saram || !telefone){ showAuthError("Preencha SARAM e telefone."); return; }
+  if(!saram){ showAuthError("Preencha o SARAM."); return; }
 
   const btn = document.getElementById("btnEsqueciSenha");
   btn.disabled = true;
   btn.textContent = "Enviando...";
   try{
     await addDoc(collection(db, "solicitacoes_senha"), {
-      saram, telefoneInformado: telefone, status: "pendente", criadoEm: serverTimestamp(),
+      saram, status: "pendente", criadoEm: serverTimestamp(),
     });
     switchAuthTab("login");
     document.getElementById("loginSaram").value = saram;
@@ -1474,7 +1468,7 @@ async function renderSenhaPedidosList(){
   list.innerHTML = pedidos.map(p => `
     <div class="list-card">
       <div class="row1"><div class="title">SARAM ${esc(p.saram)}</div><span class="tag tag-pendente">Pendente</span></div>
-      <div class="meta">Telefone informado: ${esc(p.telefoneInformado)} — confira com o cadastro em Usuários antes de resetar.</div>
+      <div class="meta">Confira em Usuários se esse SARAM é de fato quem está pedindo antes de resetar.</div>
       <div class="form-row" style="margin-top:10px;">
         <label>Senha temporária pra passar pra pessoa</label>
         <input type="text" id="senhaTemp-${p.id}" value="${esc(gerarSenhaTemp())}">

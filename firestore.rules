@@ -159,16 +159,16 @@ service cloud.firestore {
     // ---- solicitacoes_senha/{id} ----
     // Pedido de "esqueci minha senha", criado por quem NEM CONSEGUE FAZER
     // LOGIN — por isso, ao contrário de tudo mais neste arquivo, a criação
-    // aqui não exige estar logado. Só o SARAM e o telefone que a pessoa
-    // digitou (não é verificado contra o cadastro pelas regras; quem
-    // confere isso é o admin, olhando o cadastro real na aba Admin > Senha,
-    // antes de decidir se reseta). Só admin lê a fila e só admin marca como
-    // atendido — assim ninguém além de admin descobre quem pediu reset.
+    // aqui não exige estar logado. Só o SARAM (não é verificado contra o
+    // cadastro pelas regras; quem confere se é mesmo a pessoa é o admin,
+    // olhando o cadastro real na aba Admin > Senha, antes de decidir se
+    // reseta). Só admin lê a fila e só admin marca como atendido — assim
+    // ninguém além de admin descobre quem pediu reset.
     // Risco aceito: como não exige login, alguém poderia spammar pedidos
     // falsos; o pior caso é a fila do admin ficar suja, sem risco de
     // segurança de verdade — é só apagar.
     match /solicitacoes_senha/{id} {
-      allow create: if request.resource.data.keys().hasOnly(['saram','telefoneInformado','status','criadoEm'])
+      allow create: if request.resource.data.keys().hasOnly(['saram','status','criadoEm'])
         && request.resource.data.status == 'pendente'
         && request.resource.data.saram is string
         && request.resource.data.saram.size() > 0;
