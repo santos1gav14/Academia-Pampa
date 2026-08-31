@@ -340,6 +340,7 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
           <button class="btn-notif" id="btnNotificacoes">🔔<span class="notif-badge hidden" id="notifBadge">0</span></button>
+          <button class="btn-notif" id="btnTrocarSenha" title="Trocar senha">🔑</button>
           <button class="btn-logout" id="btnLogout">Sair</button>
         </div>
       </div>
@@ -561,6 +562,21 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
   </div>
 </div>
 
+<!-- ===================== SHEET: TROCAR SENHA ===================== -->
+<div class="overlay" id="senhaOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">🔑 Trocar senha</div>
+    <div class="sheet-sub">Precisa da sua senha atual pra confirmar que é você.</div>
+    <div id="senhaError" class="hidden" style="color:#E6A99E;background:var(--danger-bg);border:1px solid rgba(193,80,63,0.4);border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:12px;"></div>
+    <div class="form-row"><label>Senha atual</label><input type="password" id="senhaAtual" placeholder="••••••••"></div>
+    <div class="form-row"><label>Nova senha (mín. 6 caracteres)</label><input type="password" id="senhaNova" placeholder="••••••••"></div>
+    <div class="form-row"><label>Confirmar nova senha</label><input type="password" id="senhaNova2" placeholder="••••••••"></div>
+    <button class="btn btn-primary" id="btnSalvarSenha">Salvar nova senha</button>
+    <button class="btn btn-ghost" id="btnFecharSenha">Fechar</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script type="module">
@@ -571,7 +587,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  signOut, onAuthStateChanged
+  signOut, onAuthStateChanged, updatePassword, reauthenticateWithCredential, EmailAuthProvider
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 
 /* =======================================================================
@@ -1391,6 +1407,46 @@ document.getElementById("btnNotificacoes").onclick = () => {
   });
 };
 document.getElementById("btnFecharNotif").onclick = () => document.getElementById("notifOverlay").classList.remove("open");
+
+/* =======================================================================
+   TROCAR SENHA (self-service, precisa saber a senha atual)
+   ======================================================================= */
+document.getElementById("btnTrocarSenha").onclick = () => {
+  document.getElementById("senhaAtual").value = "";
+  document.getElementById("senhaNova").value = "";
+  document.getElementById("senhaNova2").value = "";
+  document.getElementById("senhaError").classList.add("hidden");
+  document.getElementById("senhaOverlay").classList.add("open");
+};
+document.getElementById("btnFecharSenha").onclick = () => document.getElementById("senhaOverlay").classList.remove("open");
+
+document.getElementById("btnSalvarSenha").onclick = async () => {
+  const errEl = document.getElementById("senhaError");
+  errEl.classList.add("hidden");
+  const senhaAtual = document.getElementById("senhaAtual").value;
+  const senhaNova = document.getElementById("senhaNova").value;
+  const senhaNova2 = document.getElementById("senhaNova2").value;
+
+  if(!senhaAtual){ errEl.textContent = "Informe sua senha atual."; errEl.classList.remove("hidden"); return; }
+  if(senhaNova.length < 6){ errEl.textContent = "A nova senha precisa ter pelo menos 6 caracteres."; errEl.classList.remove("hidden"); return; }
+  if(senhaNova !== senhaNova2){ errEl.textContent = "As senhas não coincidem."; errEl.classList.remove("hidden"); return; }
+
+  try{
+    const credencial = EmailAuthProvider.credential(auth.currentUser.email, senhaAtual);
+    await reauthenticateWithCredential(auth.currentUser, credencial);
+    await updatePassword(auth.currentUser, senhaNova);
+    document.getElementById("senhaOverlay").classList.remove("open");
+    showToast("Senha alterada com sucesso.");
+  }catch(e){
+    console.error(e);
+    if(e.code === "auth/wrong-password" || e.code === "auth/invalid-credential"){
+      errEl.textContent = "Senha atual incorreta.";
+    }else{
+      errEl.textContent = "Erro ao trocar a senha. Tente novamente.";
+    }
+    errEl.classList.remove("hidden");
+  }
+};
 
 /* =======================================================================
    PRESTAÇÃO DE CONTAS
