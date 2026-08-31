@@ -622,12 +622,6 @@ const firebaseConfig = {
   appId: "1:1086071589890:web:0f679985c7ad18cf0bab1b"
 };
 
-// URL da função de "esqueci minha senha" hospedada na Vercel (pasta
-// api-reset-senha/ deste repositório). Troque pelo endereço real depois
-// do deploy — enquanto estiver assim, o link "Esqueci minha senha" mostra
-// um aviso de que ainda não foi configurado.
-const RESET_SENHA_API_URL = "COLE_AQUI_A_URL_DA_VERCEL/api/reset-password";
-
 let VAGAS_GERAL = 6;
 let VAGAS_PILOTO = 2;
 function totalVagas(){ return VAGAS_GERAL + VAGAS_PILOTO; }
@@ -1468,16 +1462,27 @@ async function renderSenhaPedidosList(){
   list.innerHTML = pedidos.map(p => `
     <div class="list-card">
       <div class="row1"><div class="title">SARAM ${esc(p.saram)}</div><span class="tag tag-pendente">Pendente</span></div>
-      <div class="meta">Confira em Usuários se esse SARAM é de fato quem está pedindo antes de resetar.</div>
+      <div class="meta">Confira em Usuários se esse SARAM é de fato quem está pedindo, antes de resetar.</div>
       <div class="form-row" style="margin-top:10px;">
         <label>Senha temporária pra passar pra pessoa</label>
         <input type="text" id="senhaTemp-${p.id}" value="${esc(gerarSenhaTemp())}">
       </div>
-      <div class="btn-row">
-        <button class="btn btn-good btn-sm" style="flex:1;" data-act="resetar" data-id="${p.id}" data-saram="${p.saram}">Resetar senha</button>
-        <button class="btn btn-ghost btn-sm" style="flex:1;" data-act="ignorar" data-id="${p.id}">Ignorar pedido</button>
+      <div class="meta" style="font-family:'IBM Plex Mono',monospace;background:var(--panel-hi);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-top:6px;word-break:break-all;" id="comando-${p.id}"></div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="btn btn-primary btn-sm" style="flex:1;" data-act="copiar" data-id="${p.id}">Copiar comando</button>
+        <button class="btn btn-good btn-sm" style="flex:1;" data-act="atendido" data-id="${p.id}">Marcar como atendido</button>
       </div>
+      <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:6px;" data-act="ignorar" data-id="${p.id}">Ignorar pedido (spam/duplicado)</button>
     </div>`).join("");
+
+  pedidos.forEach(p => {
+    const atualizarComando = () => {
+      const senha = document.getElementById(`senhaTemp-${p.id}`).value.trim();
+      document.getElementById(`comando-${p.id}`).textContent = `node resetar-senha.js ${p.saram} ${senha}`;
+    };
+    document.getElementById(`senhaTemp-${p.id}`).addEventListener("input", atualizarComando);
+    atualizarComando();
+  });
 
   list.querySelectorAll("button[data-act]").forEach(btn => {
     btn.onclick = async () => {
@@ -1490,38 +1495,22 @@ async function renderSenhaPedidosList(){
         return;
       }
 
-      if(RESET_SENHA_API_URL.startsWith("COLE_AQUI")){
-        showToast("A função de reset ainda não foi configurada na Vercel.");
+      if(btn.dataset.act === "copiar"){
+        const comando = document.getElementById(`comando-${id}`).textContent;
+        try{
+          await navigator.clipboard.writeText(comando);
+          showToast("Comando copiado — cola no terminal (pasta scripts/) e roda.");
+        }catch(e){
+          showToast("Não deu pra copiar automaticamente. Copie o comando manualmente.");
+        }
         return;
       }
-      const saram = btn.dataset.saram;
-      const novaSenha = document.getElementById(`senhaTemp-${id}`).value.trim();
-      if(novaSenha.length < 6){ showToast("A senha temporária precisa ter pelo menos 6 caracteres."); return; }
 
-      btn.disabled = true;
-      btn.textContent = "Resetando...";
-      try{
-        const idToken = await auth.currentUser.getIdToken();
-        const resp = await fetch(RESET_SENHA_API_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ saram, novaSenha, idToken }),
-        });
-        const data = await resp.json().catch(() => ({}));
-        if(!resp.ok){
-          showToast(data.erro || "Erro ao resetar a senha.");
-          btn.disabled = false;
-          btn.textContent = "Resetar senha";
-          return;
-        }
+      if(btn.dataset.act === "atendido"){
+        if(!confirm("Confirma que já rodou o comando no seu computador e a senha foi trocada?")) return;
         await deleteDoc(doc(db, "solicitacoes_senha", id));
-        showToast(`Senha de ${saram} redefinida para: ${novaSenha} — repasse pra pessoa.`);
+        showToast("Pedido marcado como atendido.");
         renderSenhaPedidosList();
-      }catch(e){
-        console.error(e);
-        showToast("Erro de conexão ao resetar.");
-        btn.disabled = false;
-        btn.textContent = "Resetar senha";
       }
     };
   });
