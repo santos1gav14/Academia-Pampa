@@ -263,6 +263,32 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
           <input type="password" id="loginSenha" placeholder="••••••••">
         </div>
         <button class="btn btn-primary" id="btnLogin">Entrar</button>
+        <div style="text-align:center;margin-top:14px;">
+          <a id="linkEsqueciSenha" style="color:var(--accent);font-size:12.5px;cursor:pointer;">Esqueci minha senha</a>
+        </div>
+      </div>
+
+      <!-- ESQUECI MINHA SENHA -->
+      <div id="formEsqueciSenha" class="hidden">
+        <div class="info-banner" style="margin-bottom:14px;">Confirme seu SARAM e o telefone que está no seu cadastro pra definir uma senha nova. Contas de admin não podem ser redefinidas por aqui — fale com outro admin.</div>
+        <div class="form-row">
+          <label>SARAM</label>
+          <input type="text" id="esqSaram" placeholder="Ex.: 1234567" inputmode="numeric">
+        </div>
+        <div class="form-row">
+          <label>Telefone cadastrado</label>
+          <input type="text" id="esqTelefone" placeholder="Ex.: (55) 99999-9999" inputmode="tel">
+        </div>
+        <div class="form-row">
+          <label>Nova senha (mín. 6 caracteres)</label>
+          <input type="password" id="esqNovaSenha" placeholder="••••••••">
+        </div>
+        <div class="form-row">
+          <label>Confirmar nova senha</label>
+          <input type="password" id="esqNovaSenha2" placeholder="••••••••">
+        </div>
+        <button class="btn btn-primary" id="btnEsqueciSenha">Definir nova senha</button>
+        <button class="btn btn-ghost" id="btnVoltarLogin">Voltar para o login</button>
       </div>
 
       <!-- CADASTRO -->
@@ -602,6 +628,12 @@ const firebaseConfig = {
   appId: "1:1086071589890:web:0f679985c7ad18cf0bab1b"
 };
 
+// URL da função de "esqueci minha senha" hospedada na Vercel (pasta
+// api-reset-senha/ deste repositório). Troque pelo endereço real depois
+// do deploy — enquanto estiver assim, o link "Esqueci minha senha" mostra
+// um aviso de que ainda não foi configurado.
+const RESET_SENHA_API_URL = "COLE_AQUI_A_URL_DA_VERCEL/api/reset-password";
+
 let VAGAS_GERAL = 6;
 let VAGAS_PILOTO = 2;
 function totalVagas(){ return VAGAS_GERAL + VAGAS_PILOTO; }
@@ -702,6 +734,7 @@ function switchAuthTab(which){
   document.getElementById("tabCadastro").classList.toggle("active", which==="cadastro");
   document.getElementById("formLogin").classList.toggle("hidden", which!=="login");
   document.getElementById("formCadastro").classList.toggle("hidden", which!=="cadastro");
+  document.getElementById("formEsqueciSenha").classList.add("hidden");
   hideAuthError();
 }
 function showAuthError(msg){
@@ -710,6 +743,60 @@ function showAuthError(msg){
   el.classList.add("show");
 }
 function hideAuthError(){ document.getElementById("authError").classList.remove("show"); }
+
+document.getElementById("linkEsqueciSenha").onclick = () => {
+  document.getElementById("formLogin").classList.add("hidden");
+  document.getElementById("formCadastro").classList.add("hidden");
+  document.getElementById("formEsqueciSenha").classList.remove("hidden");
+  document.getElementById("esqSaram").value = document.getElementById("loginSaram").value;
+  document.getElementById("esqTelefone").value = "";
+  document.getElementById("esqNovaSenha").value = "";
+  document.getElementById("esqNovaSenha2").value = "";
+  hideAuthError();
+};
+document.getElementById("btnVoltarLogin").onclick = () => switchAuthTab("login");
+
+document.getElementById("btnEsqueciSenha").onclick = async () => {
+  hideAuthError();
+  if(RESET_SENHA_API_URL.startsWith("COLE_AQUI")){
+    showAuthError("Essa função ainda não foi configurada. Fale com um admin.");
+    return;
+  }
+  const saram = document.getElementById("esqSaram").value.trim();
+  const telefone = document.getElementById("esqTelefone").value.trim();
+  const novaSenha = document.getElementById("esqNovaSenha").value;
+  const novaSenha2 = document.getElementById("esqNovaSenha2").value;
+
+  if(!saram || !telefone){ showAuthError("Preencha SARAM e telefone."); return; }
+  if(novaSenha.length < 6){ showAuthError("A nova senha precisa ter pelo menos 6 caracteres."); return; }
+  if(novaSenha !== novaSenha2){ showAuthError("As senhas não coincidem."); return; }
+
+  const btn = document.getElementById("btnEsqueciSenha");
+  btn.disabled = true;
+  btn.textContent = "Verificando...";
+  try{
+    const resp = await fetch(RESET_SENHA_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ saram, telefone, novaSenha }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if(!resp.ok){
+      showAuthError(data.erro || "Não foi possível redefinir a senha.");
+      return;
+    }
+    switchAuthTab("login");
+    document.getElementById("loginSaram").value = saram;
+    document.getElementById("loginSenha").value = "";
+    showToast("Senha redefinida! Já pode entrar com a senha nova.");
+  }catch(e){
+    console.error(e);
+    showAuthError("Erro de conexão. Tente novamente.");
+  }finally{
+    btn.disabled = false;
+    btn.textContent = "Definir nova senha";
+  }
+};
 
 document.getElementById("btnLogin").onclick = async () => {
   hideAuthError();
