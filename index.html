@@ -2,6 +2,8 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Academia do Pampa — Agendamento</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
@@ -243,7 +245,7 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
     <div class="auth-wrap">
       <div class="auth-logo">P</div>
       <div class="auth-title">ACADEMIA DO PAMPA</div>
-      <div class="auth-sub">1º/14º GAV · agendamento de turnos</div>
+      <div class="auth-sub">1º/14º GAV · agendamento de turnos <span style="opacity:.55" id="versaoTag"></span></div>
 
       <div class="auth-tabs">
         <div class="auth-tab active" id="tabLogin">Entrar</div>
@@ -629,6 +631,40 @@ const firebaseConfig = {
 // Admin > Senha mostra um aviso de que ainda não foi configurado.
 const RESET_SENHA_API_URL = "https://academia-pampa.vercel.app/api/reset-password";
 
+
+/* =======================================================================
+   VERSAO DO APP E AUTOATUALIZACAO
+
+   >>> AO PUBLICAR QUALQUER MUDANCA, SOME 1 NO NUMERO ABAIXO. <<<
+
+   O navegador guarda o index.html em cache, entao as pessoas continuam
+   abrindo uma versao antiga mesmo depois de voce publicar. Este trecho
+   resolve isso: o app busca o proprio arquivo no servidor ignorando o
+   cache, compara a versao e, se houver uma mais nova, recarrega sozinho.
+   Ninguem precisa limpar cache, abrir aba anonima nem usar link diferente.
+   ======================================================================= */
+const APP_VERSION = "3";
+
+async function checarAtualizacao(){
+  try{
+    const resp = await fetch(location.pathname + "?_=" + Date.now(), { cache: "no-store" });
+    if(!resp.ok) return;
+    const texto = await resp.text();
+    const m = texto.match(/APP_VERSION\s*=\s*"([^"]+)"/);
+    if(!m) return;
+    const versaoServidor = m[1];
+    if(versaoServidor === APP_VERSION) return;
+    // trava contra laco infinito: so recarrega uma vez por versao
+    if(sessionStorage.getItem("recarregouPara") === versaoServidor) return;
+    sessionStorage.setItem("recarregouPara", versaoServidor);
+    location.replace(location.pathname + "?v=" + versaoServidor);
+  }catch(e){ /* sem rede: segue rodando a versao que ja esta aberta */ }
+}
+checarAtualizacao();
+{ const t = document.getElementById("versaoTag"); if(t) t.textContent = ` · v${APP_VERSION}`; }
+setInterval(checarAtualizacao, 10 * 60 * 1000);
+document.addEventListener("visibilitychange", () => { if(!document.hidden) checarAtualizacao(); });
+
 let VAGAS_GERAL = 6;
 let VAGAS_PILOTO = 2;
 function totalVagas(){ return VAGAS_GERAL + VAGAS_PILOTO; }
@@ -872,7 +908,7 @@ async function handleAuthedUser(user, retriesLeft){
 
   showScreen("screenApp");
   document.getElementById("userGreeting").textContent =
-    `${currentUser.posto} ${currentUser.nome}` + (currentUser.isAdmin ? " · Admin" : "");
+    `${currentUser.posto} ${currentUser.nome}` + (currentUser.isAdmin ? " · Admin" : "") + ` · v${APP_VERSION}`;
   document.getElementById("navAdminBtn").classList.toggle("hidden", !currentUser.isAdmin);
   document.getElementById("contasAdminAdd").classList.toggle("hidden", !currentUser.isAdmin);
 
