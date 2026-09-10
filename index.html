@@ -1166,7 +1166,7 @@ async function reservar(){
     if(e.message === "ESGOTADO") showToast("Turno esgotou agora. Escolha outro horário ou entre na fila de espera.");
     else if(e.message === "SOMENTE_PILOTOS") showToast("As vagas gerais esgotaram. As vagas restantes são exclusivas para pilotos.");
     else if(e.message === "JA_RESERVADO") showToast("Você já está reservado neste turno.");
-    else { console.error(e); showToast("Erro ao reservar. Tente novamente."); }
+    else { console.error(e); showToast("Erro ao reservar: " + (e.code || e.message || e)); }
   }
 }
 
@@ -1198,7 +1198,7 @@ async function entrarNaFila(){
     if(e.message === "TEM_VAGA") showToast("Tem vaga disponível agora — reserve direto.");
     else if(e.message === "JA_RESERVADO") showToast("Você já está reservado neste turno.");
     else if(e.message === "JA_NA_FILA") showToast("Você já está na fila de espera.");
-    else { console.error(e); showToast("Erro ao entrar na fila. Tente novamente."); }
+    else { console.error(e); showToast("Erro ao entrar na fila: " + (e.code || e.message || e)); }
   }
 }
 
@@ -1206,7 +1206,7 @@ async function sairDaFila(saram){
   try{
     await deleteDoc(doc(db, COLLECTION, docId(selectedDateKey, selectedTurno), "fila", saram));
     showToast("Removido(a) da fila de espera.");
-  }catch(e){ console.error(e); showToast("Erro ao sair da fila. Tente novamente."); }
+  }catch(e){ console.error(e); showToast("Erro ao sair da fila: " + (e.code || e.message || e)); }
 }
 
 async function cancelarReserva(saram){
@@ -1214,35 +1214,34 @@ async function cancelarReserva(saram){
   const reservasCol = collection(db, COLLECTION, docId(selectedDateKey, selectedTurno), "reservas");
   const filaCol = collection(db, COLLECTION, docId(selectedDateKey, selectedTurno), "fila");
   try{
+    // ETAPA 1 — cancelar. So isso importa para quem clicou no botao, entao
+    // roda sozinho: nao depende de ler a fila de espera nem de promover
+    // ninguem. Antes, tudo estava numa transacao unica e qualquer falha na
+    // parte da fila derrubava o cancelamento junto.
+    await deleteDoc(resRef);
+    await updateDoc(doc(db, "historico", `${saram}_${selectedDateKey}_${selectedTurno}`), { status: "cancelado" }).catch(()=>{});
+
+    // ETAPA 2 — promover alguem da fila de espera. E "melhor esforco": se
+    // falhar, a reserva ja foi cancelada de qualquer forma e o admin resolve
+    // a fila na mao. O erro vai para o console, sem quebrar a tela.
     let promovido = null;
-    // Reservas e fila sao lidas fora da transacao (o SDK Web nao aceita
-    // consulta dentro dela). A transacao segue garantindo que a reserva so
-    // e apagada uma vez e que a promocao acontece junto com a exclusao.
-    const reservasSnap = await getDocs(reservasCol);
-    const filaSnap = await getDocs(query(filaCol, orderBy("ts", "asc"), limit(20)));
-    await runTransaction(db, async (tx) => {
-      const resSnap = await tx.get(resRef);
-      if(!resSnap.exists()) return;
-
-      tx.delete(resRef);
-
-      // tenta promover o primeiro da fila que seja elegível pra vaga que sobrou
-      const countDepois = Math.max(0, reservasSnap.size - 1);
-      const precisaSerPiloto = countDepois >= VAGAS_GERAL;
+    try{
+      const reservasSnap = await getDocs(reservasCol);
+      const filaSnap = await getDocs(query(filaCol, orderBy("ts", "asc"), limit(20)));
+      // reservasSnap ja foi lido DEPOIS da exclusao, entao size ja e a
+      // ocupacao final — nao precisa mais descontar 1.
+      const precisaSerPiloto = reservasSnap.size >= VAGAS_GERAL;
       const candidatoDoc = filaSnap.docs.find(d => !precisaSerPiloto || d.data().isPiloto);
       if(candidatoDoc){
         const dados = candidatoDoc.data();
-        const novaResRef = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno), "reservas", dados.saram);
-        tx.set(novaResRef, {
+        await setDoc(doc(db, COLLECTION, docId(selectedDateKey, selectedTurno), "reservas", dados.saram), {
           saram: dados.saram, posto: dados.posto, nome: dados.nome,
           isPiloto: !!dados.isPiloto, date: selectedDateKey, turno: selectedTurno, ts: Date.now()
         });
-        tx.delete(candidatoDoc.ref);
+        await deleteDoc(candidatoDoc.ref);
         promovido = dados;
       }
-    });
-
-    await updateDoc(doc(db, "historico", `${saram}_${selectedDateKey}_${selectedTurno}`), { status: "cancelado" }).catch(()=>{});
+    }catch(err){ console.error("Falha ao promover da fila de espera:", err); }
 
     if(promovido){
       await setDoc(doc(db, "historico", `${promovido.saram}_${selectedDateKey}_${selectedTurno}`), {
@@ -1254,11 +1253,11 @@ async function cancelarReserva(saram){
         mensagem: `Uma vaga abriu no turno ${selectedTurno} de ${fmtDatePt(new Date(selectedDateKey+"T00:00:00"))} e você foi promovido(a) automaticamente da fila de espera. Já está reservado(a)!`,
         lida: false,
         criadoEm: serverTimestamp(),
-      });
+      }).catch(()=>{});
     }
 
     showToast("Reserva cancelada." + (promovido ? " Alguém da fila foi promovido(a)." : ""));
-  }catch(e){ console.error(e); showToast("Erro ao cancelar. Tente novamente."); }
+  }catch(e){ console.error(e); showToast("Erro ao cancelar: " + (e.code || e.message || e)); }
 }
 
 document.getElementById("btnFechar").onclick = () => document.getElementById("overlay").classList.remove("open");
