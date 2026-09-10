@@ -607,7 +607,8 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  signOut, onAuthStateChanged, updatePassword, reauthenticateWithCredential, EmailAuthProvider
+  signOut, onAuthStateChanged, updatePassword, reauthenticateWithCredential, EmailAuthProvider,
+  deleteUser
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 
 /* =======================================================================
@@ -820,6 +821,11 @@ document.getElementById("btnCadastro").onclick = async () => {
     if(e.code === "auth/email-already-in-use"){
       showAuthError("Esse SARAM já possui cadastro.");
     }else{
+      // Se a conta chegou a ser criada no Auth mas a gravacao no Firestore
+      // falhou, apaga a conta para nao deixar um cadastro "orfao" (conta
+      // existe, documento nao). Esse estado trava a pessoa por completo:
+      // todas as regras de seguranca dependem de usuarios/{saram} existir.
+      if(auth.currentUser){ await deleteUser(auth.currentUser).catch(()=>{}); }
       showAuthError("Erro ao cadastrar. Tente novamente.");
     }
   }
@@ -1132,12 +1138,16 @@ async function reservar(){
   const reservasCol = collection(db, COLLECTION, docId(selectedDateKey, selectedTurno), "reservas");
   const myResRef = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno), "reservas", currentUser.saram);
   try{
+    // A contagem de ocupacao e feita ANTES da transacao: o SDK Web do Firebase
+    // so aceita referencia de documento dentro de runTransaction (consulta em
+    // transacao so existe nos SDKs de servidor). Passar uma query aqui lancava
+    // excecao em toda reserva.
+    const existentesSnap = await getDocs(reservasCol);
+    const count = existentesSnap.size;
+    const total = totalVagas();
+    if(count >= total) throw new Error("ESGOTADO");
+    if(count >= VAGAS_GERAL && !currentUser.isPiloto) throw new Error("SOMENTE_PILOTOS");
     await runTransaction(db, async (tx) => {
-      const existentesSnap = await tx.get(query(reservasCol));
-      const count = existentesSnap.size;
-      const total = totalVagas();
-      if(count >= total) throw new Error("ESGOTADO");
-      if(count >= VAGAS_GERAL && !currentUser.isPiloto) throw new Error("SOMENTE_PILOTOS");
       const myResSnap = await tx.get(myResRef);
       if(myResSnap.exists()) throw new Error("JA_RESERVADO");
       tx.set(myResRef, {
@@ -1170,9 +1180,10 @@ async function entrarNaFila(){
   const myResRef = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno), "reservas", currentUser.saram);
   const myFilaRef = doc(db, COLLECTION, docId(selectedDateKey, selectedTurno), "fila", currentUser.saram);
   try{
+    // Mesma correcao da reserva: contagem fora da transacao.
+    const existentesSnap = await getDocs(reservasCol);
+    if(existentesSnap.size < totalVagas()) throw new Error("TEM_VAGA");
     await runTransaction(db, async (tx) => {
-      const existentesSnap = await tx.get(query(reservasCol));
-      if(existentesSnap.size < totalVagas()) throw new Error("TEM_VAGA");
       const myResSnap = await tx.get(myResRef);
       if(myResSnap.exists()) throw new Error("JA_RESERVADO");
       const myFilaSnap = await tx.get(myFilaRef);
@@ -1204,11 +1215,14 @@ async function cancelarReserva(saram){
   const filaCol = collection(db, COLLECTION, docId(selectedDateKey, selectedTurno), "fila");
   try{
     let promovido = null;
+    // Reservas e fila sao lidas fora da transacao (o SDK Web nao aceita
+    // consulta dentro dela). A transacao segue garantindo que a reserva so
+    // e apagada uma vez e que a promocao acontece junto com a exclusao.
+    const reservasSnap = await getDocs(reservasCol);
+    const filaSnap = await getDocs(query(filaCol, orderBy("ts", "asc"), limit(20)));
     await runTransaction(db, async (tx) => {
       const resSnap = await tx.get(resRef);
       if(!resSnap.exists()) return;
-      const reservasSnap = await tx.get(query(reservasCol));
-      const filaSnap = await tx.get(query(filaCol, orderBy("ts", "asc"), limit(20)));
 
       tx.delete(resRef);
 
