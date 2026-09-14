@@ -17,7 +17,25 @@ const admin = require("firebase-admin");
 let app;
 function getApp() {
   if (!app) {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    const bruto = process.env.FIREBASE_SERVICE_ACCOUNT;
+    if (!bruto) {
+      const err = new Error("FIREBASE_SERVICE_ACCOUNT não está definida na Vercel.");
+      err.motivo = "env-ausente";
+      throw err;
+    }
+    let serviceAccount;
+    try {
+      serviceAccount = JSON.parse(bruto);
+    } catch (e) {
+      const err = new Error("FIREBASE_SERVICE_ACCOUNT não é um JSON válido: " + e.message);
+      err.motivo = "env-invalida";
+      throw err;
+    }
+    // Quando o JSON é colado em painel web, a private_key às vezes chega com
+    // "\n" literal em vez de quebra de linha real — isso derruba o certificado.
+    if (typeof serviceAccount.private_key === "string") {
+      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
+    }
     app = admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
   }
   return app;
@@ -34,6 +52,98 @@ module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    res.status(204).end();
+    return;
+  }
+  if (req.method !== "POST") {
+    res.status(405).json({ erro: "Método não permitido." });
+    return;
+  }
+
+  try {
+    getApp();
+    const { saram, novaSenha, idToken } = req.body || {};
+
+    if (!saram || !novaSenha || !idToken) {
+      res.status(400).json({ erro: "Faltam dados na requisição." });
+      return;
+    }
+    if (String(novaSenha).length < 6) {
+      res.status(400).json({ erro: "A senha temporária precisa ter pelo menos 6 caracteres." });
+      return;
+    }
+
+    // 1. Confirma que quem está chamando é um usuário autenticado de verdade
+    let tokenDecodificado;
+    try {
+      tokenDecodificado = await admin.auth().verifyIdToken(idToken);
+    } catch (e) {
+      res.status(401).json({ erro: "Sessão inválida. Faça login de novo e tente outra vez." });
+      return;
+    }
+    if (!tokenDecodificado.email) {
+      res.status(401).json({ erro: "Sua conta de login não tem e-mail associado. Faça login de novo." });
+      return;
+    }
+
+    // 2. Confirma que essa pessoa é admin (checando o próprio cadastro dela no Firestore)
+    const solicitanteSaram = tokenDecodificado.email.replace(EMAIL_DOMAIN, "");
+    const db = admin.firestore();
+    const solicitanteSnap = await db.collection("usuarios").doc(solicitanteSaram).get();
+    if (!solicitanteSnap.exists || solicitanteSnap.data().isAdmin !== true) {
+      res.status(403).json({ erro: "Só administradores podem resetar senha de outra pessoa." });
+      return;
+    }
+
+    // 3. Confirma que o SARAM alvo existe e troca a senha
+    const saramLimpo = String(saram).trim();
+    const alvoSnap = await db.collection("usuarios").doc(saramLimpo).get();
+    if (!alvoSnap.exists) {
+      res.status(404).json({ erro: "SARAM não encontrado no cadastro do app." });
+      return;
+    }
+
+    let authUser;
+    try {
+      authUser = await admin.auth().getUserByEmail(saramParaEmail(saramLimpo));
+    } catch (e) {
+      if (e.code === "auth/user-not-found") {
+        res.status(404).json({
+          erro: "Esse SARAM tem cadastro no app, mas não tem conta de login no Firebase Auth. " +
+                "Remova o usuário em Admin > Usuários e cadastre de novo.",
+        });
+        return;
+      }
+      throw e;
+    }
+
+    await admin.auth().updateUser(authUser.uid, { password: String(novaSenha) });
+
+    res.status(200).json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    // Mensagem específica pra cada causa conhecida — sem isso qualquer problema
+    // virava "Erro interno" e não dava pra saber o que estava acontecendo.
+    if (e.motivo === "env-ausente") {
+      res.status(500).json({
+        erro: "Servidor sem a chave do Firebase (FIREBASE_SERVICE_ACCOUNT não configurada na Vercel).",
+      });
+      return;
+    }
+    if (e.motivo === "env-invalida") {
+      res.status(500).json({
+        erro: "A chave do Firebase na Vercel está mal colada (JSON inválido).",
+      });
+      return;
+    }
+    // O app só mostra o campo "erro" no aviso, então a causa real vai dentro dele.
+    res.status(500).json({
+      erro: "Erro: " + String(e.code || e.message || e),
+    });
+  }
+};
 
   if (req.method === "OPTIONS") {
     res.status(204).end();
