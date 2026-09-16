@@ -509,7 +509,15 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
       </div>
 
       <div id="adminPagamentos" class="hidden">
-        <div class="section-title" style="padding-top:2px;">Chave Pix da academia</div>
+        <div class="section-title" style="padding-top:2px;">Valor da mensalidade</div>
+        <div class="card-list">
+          <div class="list-card">
+            <div class="form-row"><label>Mensalidade (R$)</label><input type="number" id="mensalidadeValor" step="0.01" min="0" placeholder="50.00" inputmode="decimal"></div>
+            <div class="meta" style="margin:-2px 0 12px;line-height:1.5;">Valor usado ao marcar alguém como pago. Se mudar, os pagamentos já marcados continuam com o valor da época.</div>
+            <button class="btn btn-primary" id="btnSalvarMensalidade">Salvar valor</button>
+          </div>
+        </div>
+        <div class="section-title">Chave Pix da academia</div>
         <div class="card-list">
           <div class="list-card">
             <div class="form-row"><label>Tipo de chave</label>
@@ -528,6 +536,10 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
         </div>
         <div class="section-title">Controle de pagamentos</div>
         <div class="month-select-wrap"><select id="pagMonthSelect"></select></div>
+        <div class="contas-summary" style="padding-top:10px;padding-bottom:0;">
+          <div class="summary-card"><div class="lbl">Mensalidades pagas</div><div class="val" id="pagQtdVal">0</div></div>
+          <div class="summary-card receita"><div class="lbl" id="pagArrecadadoLbl">Arrecadado</div><div class="val" id="pagTotalVal">R$ 0,00</div></div>
+        </div>
         <div class="pag-toolbar">
           <div class="seg" id="pagFiltroStatus">
             <div class="seg-opt active" data-v="todos">Todos<span class="n"></span></div>
@@ -696,7 +708,7 @@ const RESET_SENHA_API_URL = "https://academia-pampa.vercel.app/api/reset-passwor
    cache, compara a versao e, se houver uma mais nova, recarrega sozinho.
    Ninguem precisa limpar cache, abrir aba anonima nem usar link diferente.
    ======================================================================= */
-const APP_VERSION = "5";
+const APP_VERSION = "6";
 
 async function checarAtualizacao(){
   try{
@@ -1364,8 +1376,10 @@ async function renderMeusAcessos(){
   try{
     const pagDoc = await getDoc(doc(db, "pagamentos", `${currentUser.saram}_${mk}`));
     const pago = pagDoc.exists() && pagDoc.data().pago;
+    await carregarMensalidade();
+    const valorMes = pago && Number(pagDoc.data().valorPago) > 0 ? Number(pagDoc.data().valorPago) : mensalidadeValor;
     box.innerHTML = `<div class="list-card row1" style="display:flex;justify-content:space-between;align-items:center;">
-      <div><div class="title">Mensalidade — ${mesLabel(mk)}</div><div class="meta">Status do pagamento deste mês</div></div>
+      <div><div class="title">Mensalidade — ${mesLabel(mk)}</div><div class="meta">${fmtBRL(valorMes)} · ${pago ? "pagamento confirmado" : "status do pagamento deste mês"}</div></div>
       <span class="tag ${pago?"tag-pago":"tag-devendo"}">${pago?"Pago":"Pendente"}</span>
     </div>`;
   }catch(e){ console.error(e); box.innerHTML = ""; }
@@ -1737,6 +1751,7 @@ document.getElementById("pagMonthSelect").addEventListener("change", renderPagam
 
 async function renderContasTab(){
   const seq = ++contasRenderSeq;
+  await syncMensalidadesFila;
   const sel = document.getElementById("contasMonthSelect");
   if(!sel.value) sel.value = mesKey(new Date());
   let snap;
@@ -1902,7 +1917,7 @@ function desenharListaLancamentos(mk){
       ? ` · editado por ${esc(it.editadoPor)}${it.editadoEm?.toDate ? " em " + it.editadoEm.toDate().toLocaleDateString("pt-BR") : ""}`
       : "";
     const meses = opcoesMes.includes(it.mes) ? opcoesMes : [it.mes, ...opcoesMes];
-    const adminHtml = !admin ? "" : `
+    const adminHtml = (!admin || it.automatico) ? "" : `
       <div class="btn-row" style="margin-top:10px;">
         <button class="btn btn-ghost btn-sm" style="flex:1;" data-fin-act="editar" data-id="${esc(it.id)}">Editar</button>
         <button class="btn btn-danger btn-sm" style="flex:1;" data-fin-act="excluir" data-id="${esc(it.id)}">Excluir</button>
@@ -1928,7 +1943,7 @@ function desenharListaLancamentos(mk){
       </div>`;
     return `<div class="list-card">
       <div class="row1">
-        <div style="min-width:0;"><div class="title">${esc(it.descricao)}</div><div class="meta">${rec?"Receita":"Despesa"}${editado}</div></div>
+        <div style="min-width:0;"><div class="title">${esc(it.descricao)}</div><div class="meta">${rec?"Receita":"Despesa"}${it.automatico ? ` · automática${admin ? " (ajuste em Admin > Pagamentos)" : ""}` : editado}</div></div>
         <div class="fin-valor ${rec?"rec":"desp"}">${rec?"+":"-"}${fmtBRL(Number(it.valor)||0)}</div>
       </div>
       ${adminHtml}
@@ -1940,7 +1955,7 @@ function desenharListaLancamentos(mk){
     btn.onclick = async () => {
       const id = btn.dataset.id;
       const it = contasItens.find(x => x.id === id);
-      if(!it) return;
+      if(!it || it.automatico) return;
       const act = btn.dataset.finAct;
 
       if(act === "editar"){
@@ -2255,9 +2270,107 @@ const POSTOS_HIERARQUIA = ["Cel","Ten Cel","Maj","Cap","1º Ten","2º Ten","Asp"
 function rankPosto(p){ const i = POSTOS_HIERARQUIA.indexOf(p); return i < 0 ? 999 : i; }
 function cmpNome(a, b){ return String(a.nome||"").localeCompare(String(b.nome||""), "pt-BR", { sensitivity:"base" }); }
 
-let pagState = { mk:null, usuarios:[], pagos:{} };
+let pagState = { mk:null, usuarios:[], pagos:{}, valores:{} };
 let pagFiltroStatus = "todos";
 let pagRenderSeq = 0;
+
+/* -----------------------------------------------------------------------
+   MENSALIDADE E RECEITA AUTOMÁTICA
+   O valor da mensalidade fica em config/mensalidade (padrão R$ 50,00).
+   Ao marcar alguém como pago, o valor vigente é gravado no próprio
+   pagamento (valorPago) — assim um reajuste futuro não altera meses
+   antigos. A soma dos pagamentos do mês vira um único lançamento de
+   receita em financas/mensalidades_AAAA-MM, criado, atualizado e
+   apagado só pelo app (aparece na aba Contas como "automática").
+   ----------------------------------------------------------------------- */
+const MENSALIDADE_PADRAO = 50;
+let mensalidadeValor = MENSALIDADE_PADRAO;
+let syncMensalidadesFila = Promise.resolve();
+
+async function carregarMensalidade(){
+  try{
+    const d = await getDoc(doc(db, "config", "mensalidade"));
+    const v = d.exists() ? Number(d.data().valor) : NaN;
+    mensalidadeValor = v > 0 ? v : MENSALIDADE_PADRAO;
+  }catch(e){ console.error(e); }
+  return mensalidadeValor;
+}
+
+document.getElementById("btnSalvarMensalidade").onclick = async () => {
+  if(!currentUser?.isAdmin) return;
+  const input = document.getElementById("mensalidadeValor");
+  const v = Math.round(parseFloat(input.value) * 100) / 100;
+  if(!(v > 0)){ showToast("Informe um valor de mensalidade válido."); return; }
+  const btn = document.getElementById("btnSalvarMensalidade");
+  btn.disabled = true;
+  try{
+    await setDoc(doc(db, "config", "mensalidade"), {
+      valor: v, atualizadoEm: serverTimestamp(), atualizadoPor: `${currentUser.posto} ${currentUser.nome}`
+    });
+    mensalidadeValor = v;
+    input.value = v.toFixed(2);
+    showToast(`Mensalidade salva: ${fmtBRL(v)}.`);
+  }catch(e){
+    console.error(e);
+    showToast("Erro ao salvar o valor da mensalidade.");
+  }finally{
+    btn.disabled = false;
+  }
+};
+
+function descricaoMensalidades(valores, total){
+  const base = `${valores.length} ${valores.length === 1 ? "mensalidade recebida" : "mensalidades recebidas"}`;
+  const distintos = new Set(valores.map(v => v.toFixed(2)));
+  return distintos.size === 1
+    ? `${base} × ${fmtBRL(valores[0])} = ${fmtBRL(total)}`
+    : `${base} = ${fmtBRL(total)}`;
+}
+
+// Recalcula a receita do mês a partir dos pagamentos gravados no banco (não
+// da tela), então também corrige qualquer divergência — por exemplo, dois
+// admins marcando pagamentos ao mesmo tempo.
+async function sincronizarReceitaMensalidades(mk){
+  if(!currentUser?.isAdmin) return;
+  const snap = await getDocs(query(collection(db,"pagamentos"), where("mes","==",mk)));
+  const valores = [];
+  const semValor = [];
+  snap.forEach(d=>{
+    const p = d.data();
+    if(!p.pago) return;
+    let v = Number(p.valorPago);
+    if(!(v > 0)){ v = mensalidadeValor; semValor.push(d.id); }
+    valores.push(v);
+  });
+  // Pagamentos marcados antes da v6 não guardavam o valor: grava o valor
+  // vigente uma única vez, para que um reajuste futuro não mude esse mês.
+  for(const id of semValor) await updateDoc(doc(db,"pagamentos",id), { valorPago: mensalidadeValor });
+
+  const ref = doc(db, "financas", `mensalidades_${mk}`);
+  const atual = await getDoc(ref);
+  if(valores.length === 0){
+    if(atual.exists()) await deleteDoc(ref);
+    return;
+  }
+  const total = Math.round(valores.reduce((a,v) => a + v, 0) * 100) / 100;
+  const descricao = descricaoMensalidades(valores, total);
+  const a = atual.exists() ? atual.data() : null;
+  if(a && a.valor === total && a.descricao === descricao && a.tipo === "receita" && a.mes === mk && a.automatico) return;
+  await setDoc(ref, {
+    tipo: "receita", valor: total, descricao, mes: mk, qtd: valores.length, automatico: true,
+    criadoEm: a?.criadoEm || serverTimestamp(), atualizadoEm: serverTimestamp()
+  });
+}
+
+function agendarSyncMensalidades(mk){
+  // em fila: cliques rápidos em sequência nunca gravam fora de ordem
+  syncMensalidadesFila = syncMensalidadesFila
+    .then(() => sincronizarReceitaMensalidades(mk))
+    .catch(e => {
+      console.error(e);
+      showToast("Pagamento salvo, mas a receita do mês não foi atualizada. Abra Pagamentos de novo para tentar outra vez.");
+    });
+  return syncMensalidadesFila;
+}
 
 document.querySelectorAll("#pagFiltroStatus .seg-opt").forEach(opt=>{
   opt.onclick = () => {
@@ -2276,14 +2389,21 @@ async function renderPagamentosList(){
   const list = document.getElementById("pagamentosList");
   if(pagState.mk !== mk) list.innerHTML = `<div class="empty-state">Carregando...</div>`;
   try{
+    await carregarMensalidade();
+    const inputMens = document.getElementById("mensalidadeValor");
+    if(document.activeElement !== inputMens) inputMens.value = mensalidadeValor.toFixed(2);
     const usnap = await getDocs(query(collection(db,"usuarios"), where("status","==","aprovado")));
     const pagSnap = await getDocs(query(collection(db,"pagamentos"), where("mes","==",mk)));
     if(seq !== pagRenderSeq) return;
     const usuarios = [];
     usnap.forEach(d => usuarios.push(d.data()));
-    const pagos = {};
-    pagSnap.forEach(d => { pagos[d.data().saram] = !!d.data().pago; });
-    pagState = { mk, usuarios, pagos };
+    const pagos = {}, valores = {};
+    pagSnap.forEach(d => {
+      const p = d.data();
+      pagos[p.saram] = !!p.pago;
+      if(p.pago) valores[p.saram] = Number(p.valorPago) > 0 ? Number(p.valorPago) : mensalidadeValor;
+    });
+    pagState = { mk, usuarios, pagos, valores };
   }catch(e){
     console.error(e);
     if(seq === pagRenderSeq) list.innerHTML = `<div class="empty-state">Erro ao carregar pagamentos.</div>`;
@@ -2291,6 +2411,7 @@ async function renderPagamentosList(){
   }
   preencherOpcoesPosto("pagFiltroPosto", pagState.usuarios);
   desenharPagamentos();
+  agendarSyncMensalidades(mk); // garante que a receita do mês bate com os pagamentos
 }
 
 function preencherOpcoesPosto(selectId, usuarios){
@@ -2303,11 +2424,18 @@ function preencherOpcoesPosto(selectId, usuarios){
 }
 
 function desenharPagamentos(){
-  const { mk, usuarios, pagos } = pagState;
+  const { mk, usuarios, pagos, valores } = pagState;
   if(!mk) return;
   const list = document.getElementById("pagamentosList");
   const posto = document.getElementById("pagFiltroPosto").value;
   const ordem = document.getElementById("pagOrdem").value;
+
+  // arrecadação do mês inteiro (independe dos filtros)
+  const valoresMes = Object.values(valores);
+  const totalMes = Math.round(valoresMes.reduce((a,v) => a + v, 0) * 100) / 100;
+  document.getElementById("pagQtdVal").textContent = valoresMes.length;
+  document.getElementById("pagTotalVal").textContent = fmtBRL(totalMes);
+  document.getElementById("pagArrecadadoLbl").textContent = `Arrecadado ${mesLabel(mk)}`;
 
   const doPosto = posto ? usuarios.filter(u => u.posto === posto) : usuarios;
   const nPagos = doPosto.filter(u => pagos[u.saram]).length;
@@ -2330,8 +2458,9 @@ function desenharPagamentos(){
   }
   list.innerHTML = lista.map(u => {
     const pago = !!pagos[u.saram];
+    const meta = pago ? `SARAM ${esc(u.saram)} · ${fmtBRL(valores[u.saram])}` : `SARAM ${esc(u.saram)}`;
     return `<div class="list-card row1" style="display:flex;justify-content:space-between;align-items:center;">
-      <div style="min-width:0;"><div class="title">${esc(u.posto)} ${esc(u.nome)}</div><div class="meta">SARAM ${esc(u.saram)}</div></div>
+      <div style="min-width:0;"><div class="title">${esc(u.posto)} ${esc(u.nome)}</div><div class="meta">${meta}</div></div>
       <button class="btn btn-sm ${pago?"btn-good":"btn-danger"}" data-saram="${esc(u.saram)}">${pago?"Pago":"Não pago"}</button>
     </div>`;
   }).join("");
@@ -2342,8 +2471,15 @@ function desenharPagamentos(){
       const novoPago = !pagState.pagos[saram];
       btn.disabled = true;
       try{
-        await setDoc(doc(db,"pagamentos", `${saram}_${mk}`), { saram, mes: mk, pago: novoPago, atualizadoEm: serverTimestamp() });
-        if(pagState.mk === mk){ pagState.pagos[saram] = novoPago; desenharPagamentos(); }
+        const dados = { saram, mes: mk, pago: novoPago, atualizadoEm: serverTimestamp() };
+        if(novoPago) dados.valorPago = mensalidadeValor;
+        await setDoc(doc(db,"pagamentos", `${saram}_${mk}`), dados);
+        if(pagState.mk === mk){
+          pagState.pagos[saram] = novoPago;
+          if(novoPago) pagState.valores[saram] = mensalidadeValor; else delete pagState.valores[saram];
+          desenharPagamentos();
+        }
+        agendarSyncMensalidades(mk);
       }catch(e){
         console.error(e);
         btn.disabled = false;
