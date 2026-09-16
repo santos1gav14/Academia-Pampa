@@ -6,7 +6,6 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Academia do Pampa — Agendamento</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
@@ -232,7 +231,37 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
 .summary-card.receita .val{color:var(--good);}
 .summary-card.despesa .val{color:var(--danger);}
 .summary-card.saldo .val{color:var(--accent);}
-.chart-box{padding:8px 16px 16px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);margin:0 16px 16px;}
+.chart-box{padding:14px 12px 12px;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);margin:0 16px 16px;}
+.dash-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0 4px 8px;flex-wrap:wrap;}
+.dash-title{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--text-dim);}
+.dash-legend{display:flex;gap:10px;font-size:10.5px;color:var(--text-dim);}
+.dash-legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle;position:relative;top:-1px;}
+.dash-legend i.linha{width:12px;height:2px;border-radius:1px;}
+.dash-ax{font-family:'IBM Plex Mono',monospace;font-size:8.5px;fill:var(--text-dim);}
+.dash-mes{font-family:'IBM Plex Mono',monospace;font-size:9px;fill:var(--text-dim);}
+.dash-mes.sel{fill:var(--accent);font-weight:700;}
+.dash-ano{font-family:'IBM Plex Mono',monospace;font-size:7.5px;fill:var(--text-dim);opacity:.7;}
+.dash-vazio{font-size:11px;fill:var(--text-dim);}
+.dash-hit{cursor:pointer;}
+.dash-foot{display:flex;gap:8px;margin:10px 4px 0;padding-top:10px;border-top:1px dashed var(--border);}
+.dash-foot > div{flex:1;min-width:0;}
+.dash-foot .lbl{font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.4px;font-family:'IBM Plex Mono',monospace;}
+.dash-foot .val{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;margin-top:3px;white-space:nowrap;}
+.dash-hint{font-size:10.5px;color:var(--text-dim);text-align:center;margin-top:10px;opacity:.75;}
+.fin-valor{font-family:'IBM Plex Mono',monospace;font-weight:600;white-space:nowrap;}
+.fin-valor.rec{color:var(--good);}
+.fin-valor.desp{color:var(--danger);}
+
+/* ---------- PAGAMENTOS: FILTROS ---------- */
+.pag-toolbar{padding:10px 16px 2px;}
+.seg{display:flex;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:3px;gap:2px;}
+.seg-opt{flex:1;text-align:center;padding:8px 2px;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text-dim);white-space:nowrap;user-select:none;-webkit-user-select:none;}
+.seg-opt.active{background:var(--accent);color:#1A1204;}
+.seg-opt .n{font-family:'IBM Plex Mono',monospace;font-weight:500;opacity:.75;margin-left:3px;}
+.pag-selects{display:flex;gap:8px;margin-top:10px;}
+.pag-selects > div{flex:1;min-width:0;}
+.pag-selects label{display:block;font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;font-family:'IBM Plex Mono',monospace;}
+.pag-resumo{font-size:11.5px;color:var(--text-dim);margin-top:10px;font-family:'IBM Plex Mono',monospace;}
 
 .month-select-wrap{padding:12px 16px 0;}
 </style>
@@ -402,7 +431,7 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
         <div class="summary-card despesa"><div class="lbl">Despesas</div><div class="val" id="contasDespesaVal">R$ 0</div></div>
         <div class="summary-card saldo"><div class="lbl">Saldo</div><div class="val" id="contasSaldoVal">R$ 0</div></div>
       </div>
-      <div class="chart-box"><canvas id="contasChart" height="180"></canvas></div>
+      <div class="chart-box" id="contasDashboard"></div>
       <div id="contasAdminAdd" class="hidden">
         <div class="section-title">Lançar movimentação (admin)</div>
         <div class="card-list">
@@ -487,6 +516,18 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
         </div>
         <div class="section-title">Controle de pagamentos</div>
         <div class="month-select-wrap"><select id="pagMonthSelect"></select></div>
+        <div class="pag-toolbar">
+          <div class="seg" id="pagFiltroStatus">
+            <div class="seg-opt active" data-v="todos">Todos<span class="n"></span></div>
+            <div class="seg-opt" data-v="pago">Pago<span class="n"></span></div>
+            <div class="seg-opt" data-v="nao">Não pago<span class="n"></span></div>
+          </div>
+          <div class="pag-selects">
+            <div><label>Posto</label><select id="pagFiltroPosto"><option value="">Todos</option></select></div>
+            <div><label>Ordenar</label><select id="pagOrdem"><option value="alfabetica">Alfabética</option><option value="antiguidade">Antiguidade</option></select></div>
+          </div>
+          <div class="pag-resumo" id="pagResumo"></div>
+        </div>
         <div class="card-list" id="pagamentosList"></div>
       </div>
 
@@ -643,7 +684,7 @@ const RESET_SENHA_API_URL = "https://academia-pampa.vercel.app/api/reset-passwor
    cache, compara a versao e, se houver uma mais nova, recarrega sozinho.
    Ninguem precisa limpar cache, abrir aba anonima nem usar link diferente.
    ======================================================================= */
-const APP_VERSION = "3";
+const APP_VERSION = "4";
 
 async function checarAtualizacao(){
   try{
@@ -1658,76 +1699,310 @@ document.getElementById("btnSalvarSenha").onclick = async () => {
 
 /* =======================================================================
    PRESTAÇÃO DE CONTAS
+   O dashboard é desenhado pelo próprio app em SVG, sem biblioteca externa
+   de gráficos: na v3 o gráfico dependia do Chart.js vindo de um CDN e,
+   quando esse download falhava ou era bloqueado pela rede, o quadro
+   ficava vazio.
    ======================================================================= */
-let contasChartInstance = null;
-function buildMonthSelectors(){
+const MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+let contasItens = [];        // todos os lançamentos, de todos os meses
+let contasRenderSeq = 0;     // descarta respostas atrasadas de buscas anteriores
+let contasEditandoId = null; // lançamento com o painel de edição aberto
+
+function ultimos12Meses(){ // do mais recente para o mais antigo
   const now = new Date();
-  const opts = [];
-  for(let i=0;i<12;i++){
-    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
-    const mk = mesKey(d);
-    opts.push(`<option value="${mk}">${mesLabel(mk)}</option>`);
-  }
-  document.getElementById("contasMonthSelect").innerHTML = opts.join("");
-  document.getElementById("pagMonthSelect").innerHTML = opts.join("");
+  const arr = [];
+  for(let i=0;i<12;i++) arr.push(mesKey(new Date(now.getFullYear(), now.getMonth()-i, 1)));
+  return arr;
 }
-document.getElementById("contasMonthSelect").addEventListener("change", renderContasTab);
+function buildMonthSelectors(){
+  const opts = ultimos12Meses().map(mk=>`<option value="${mk}">${mesLabel(mk)}</option>`).join("");
+  document.getElementById("contasMonthSelect").innerHTML = opts;
+  document.getElementById("pagMonthSelect").innerHTML = opts;
+}
+document.getElementById("contasMonthSelect").addEventListener("change", () => { contasEditandoId = null; desenharContas(); });
 document.getElementById("pagMonthSelect").addEventListener("change", renderPagamentosList);
 
 async function renderContasTab(){
-  const mk = document.getElementById("contasMonthSelect").value || mesKey(new Date());
-  document.getElementById("contasMonthSelect").value = mk;
-  const snap = await getDocs(query(collection(db,"financas"), where("mes","==",mk)));
-  let receita = 0, despesa = 0;
-  const itens = [];
-  snap.forEach(d=>{
-    const it = d.data();
-    if(it.tipo==="receita") receita += it.valor; else despesa += it.valor;
-    itens.push({id:d.id, ...it});
+  const seq = ++contasRenderSeq;
+  const sel = document.getElementById("contasMonthSelect");
+  if(!sel.value) sel.value = mesKey(new Date());
+  let snap;
+  try{
+    // Busca tudo de uma vez (sem filtro por mês): a mesma leitura alimenta o
+    // resumo do mês, o dashboard de 12 meses e o saldo acumulado.
+    snap = await getDocs(collection(db,"financas"));
+  }catch(e){
+    console.error(e);
+    showToast("Erro ao carregar a prestação de contas.");
+    return;
+  }
+  if(seq !== contasRenderSeq) return;
+  contasItens = [];
+  snap.forEach(d => contasItens.push({ id:d.id, ...d.data() }));
+  desenharContas();
+}
+
+function totaisPorMes(){
+  const map = {};
+  contasItens.forEach(it=>{
+    const t = map[it.mes] || (map[it.mes] = { receita:0, despesa:0 });
+    const v = Number(it.valor) || 0;
+    if(it.tipo==="receita") t.receita += v; else t.despesa += v;
   });
-  document.getElementById("contasReceitaVal").textContent = fmtBRL(receita);
-  document.getElementById("contasDespesaVal").textContent = fmtBRL(despesa);
-  document.getElementById("contasSaldoVal").textContent = fmtBRL(receita-despesa);
+  return map;
+}
 
-  const ctx = document.getElementById("contasChart");
-  if(contasChartInstance) contasChartInstance.destroy();
-  if(window.Chart){
-    contasChartInstance = new Chart(ctx, {
-      type: "bar",
-      data: {
-        labels: ["Receitas","Despesas"],
-        datasets: [{ data:[receita,despesa], backgroundColor:["#5B9279","#C1503F"], borderRadius:6 }]
-      },
-      options: {
-        plugins:{legend:{display:false}},
-        scales:{ y:{ ticks:{color:"#8CA0AA"}, grid:{color:"#2B3944"} }, x:{ ticks:{color:"#8CA0AA"}, grid:{display:false} } }
-      }
+function desenharContas(){
+  const mk = document.getElementById("contasMonthSelect").value || mesKey(new Date());
+  const porMes = totaisPorMes();
+  const t = porMes[mk] || { receita:0, despesa:0 };
+  document.getElementById("contasReceitaVal").textContent = fmtBRL(t.receita);
+  document.getElementById("contasDespesaVal").textContent = fmtBRL(t.despesa);
+  document.getElementById("contasSaldoVal").textContent = fmtBRL(t.receita - t.despesa);
+
+  const box = document.getElementById("contasDashboard");
+  box.innerHTML = dashboardHTML(porMes, mk);
+  box.querySelectorAll(".dash-hit").forEach(el=>{
+    el.addEventListener("click", () => {
+      document.getElementById("contasMonthSelect").value = el.dataset.mk;
+      contasEditandoId = null;
+      desenharContas();
     });
+  });
+
+  desenharListaLancamentos(mk);
+}
+
+function fmtCompacto(v){
+  const a = Math.abs(v), sinal = v < 0 ? "-" : "";
+  if(a >= 1000) return sinal + (a/1000).toLocaleString("pt-BR",{maximumFractionDigits:1}) + " mil";
+  return sinal + Math.round(a).toLocaleString("pt-BR");
+}
+function passoBonito(bruto){
+  if(!(bruto > 0)) return 1;
+  const exp = Math.pow(10, Math.floor(Math.log10(bruto)));
+  const f = bruto / exp;
+  return (f<=1 ? 1 : f<=2 ? 2 : f<=2.5 ? 2.5 : f<=5 ? 5 : 10) * exp;
+}
+
+function dashboardHTML(porMes, mkSel){
+  const meses = ultimos12Meses().reverse(); // mais antigo -> mais recente
+  const dados = meses.map(mk=>{
+    const t = porMes[mk] || { receita:0, despesa:0 };
+    return { mk, r:t.receita, d:t.despesa, s:t.receita - t.despesa };
+  });
+  const temDados = dados.some(x => x.r || x.d);
+
+  const W = 360, H = 206, padL = 42, padR = 6, padT = 10, padB = 32;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  let maxV = Math.max(0, ...dados.map(x => Math.max(x.r, x.d, x.s)));
+  let minV = Math.min(0, ...dados.map(x => x.s));
+  if(maxV === minV) maxV = minV + 100;
+  const passo = passoBonito((maxV - minV) / 4);
+  const topo = Math.ceil(maxV / passo) * passo;
+  const base = Math.floor(minV / passo) * passo;
+  const y = v => padT + (topo - v) / (topo - base) * plotH;
+  const col = plotW / 12;
+  const bw = Math.min(10, col * 0.32);
+  const cx = i => padL + col * i + col / 2;
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Receitas, despesas e saldo dos últimos 12 meses" style="display:block;overflow:visible;">`;
+
+  // destaque do mês selecionado (atrás de tudo)
+  dados.forEach((x,i)=>{
+    if(x.mk === mkSel) svg += `<rect x="${(padL+col*i+1).toFixed(1)}" y="${padT-4}" width="${(col-2).toFixed(1)}" height="${plotH+4+padB-2}" rx="5" style="fill:var(--panel-hi)"/>`;
+  });
+
+  // grade e eixo Y
+  const nLinhas = Math.round((topo - base) / passo);
+  for(let k=0; k<=nLinhas; k++){
+    const v = base + k * passo;
+    const yy = y(v).toFixed(1);
+    svg += `<line x1="${padL}" x2="${W-padR}" y1="${yy}" y2="${yy}" style="stroke:var(--border);stroke-width:${v===0?1.2:0.6}"/>`;
+    svg += `<text x="${padL-6}" y="${yy}" dy="3" text-anchor="end" class="dash-ax">${fmtCompacto(v)}</text>`;
   }
 
-  const lista = document.getElementById("contasLista");
-  if(itens.length===0){ lista.innerHTML = `<div class="empty-state">Nenhum lançamento neste mês.</div>`; }
-  else{
-    lista.innerHTML = itens.map(it=>`
-      <div class="list-card row1" style="display:flex;justify-content:space-between;">
-        <div><div class="title">${it.descricao}</div><div class="meta">${it.tipo==="receita"?"Receita":"Despesa"}</div></div>
-        <div style="font-family:'IBM Plex Mono',monospace;color:${it.tipo==="receita"?"var(--good)":"var(--danger)"};font-weight:600;">${it.tipo==="despesa"?"-":"+"}${fmtBRL(it.valor)}</div>
-      </div>`).join("");
+  // barras e rótulos dos meses
+  const y0 = y(0);
+  dados.forEach((x,i)=>{
+    const sel = x.mk === mkSel;
+    if(x.r > 0) svg += `<rect x="${(cx(i)-bw-0.8).toFixed(1)}" y="${y(x.r).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(y0-y(x.r),1.5).toFixed(1)}" rx="2" style="fill:var(--good)"/>`;
+    if(x.d > 0) svg += `<rect x="${(cx(i)+0.8).toFixed(1)}" y="${y(x.d).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(y0-y(x.d),1.5).toFixed(1)}" rx="2" style="fill:var(--danger)"/>`;
+    const [ano, mes] = x.mk.split("-");
+    svg += `<text x="${cx(i).toFixed(1)}" y="${H-padB+13}" text-anchor="middle" class="dash-mes${sel?' sel':''}">${MESES_ABREV[parseInt(mes,10)-1]}</text>`;
+    if(i === 0 || mes === "01") svg += `<text x="${cx(i).toFixed(1)}" y="${H-padB+24}" text-anchor="middle" class="dash-ano">${ano}</text>`;
+  });
+
+  if(temDados){
+    // linha do saldo do mês
+    const pts = dados.map((x,i)=>`${cx(i).toFixed(1)},${y(x.s).toFixed(1)}`).join(" ");
+    svg += `<polyline points="${pts}" style="fill:none;stroke:var(--accent);stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round"/>`;
+    dados.forEach((x,i)=>{
+      const sel = x.mk === mkSel;
+      svg += `<circle cx="${cx(i).toFixed(1)}" cy="${y(x.s).toFixed(1)}" r="${sel?3.8:2.2}" style="fill:var(--accent);stroke:var(--panel);stroke-width:${sel?1.5:1}"/>`;
+    });
+  }else{
+    svg += `<text x="${padL + plotW/2}" y="${padT + plotH/2}" text-anchor="middle" class="dash-vazio">Nenhum lançamento nos últimos 12 meses</text>`;
   }
+
+  // áreas de toque: tocar num mês seleciona o mês
+  dados.forEach((x,i)=>{
+    svg += `<rect class="dash-hit" data-mk="${x.mk}" x="${(padL+col*i).toFixed(1)}" y="0" width="${col.toFixed(1)}" height="${H}" style="fill:transparent"><title>${mesLabel(x.mk)}</title></rect>`;
+  });
+  svg += `</svg>`;
+
+  const tot12r = dados.reduce((a,x)=>a+x.r, 0);
+  const tot12d = dados.reduce((a,x)=>a+x.d, 0);
+  let acumulado = 0;
+  Object.keys(porMes).forEach(mk=>{ if(mk <= mkSel) acumulado += porMes[mk].receita - porMes[mk].despesa; });
+
+  return `
+    <div class="dash-head">
+      <div class="dash-title">Últimos 12 meses</div>
+      <div class="dash-legend">
+        <span><i style="background:var(--good)"></i>Receitas</span>
+        <span><i style="background:var(--danger)"></i>Despesas</span>
+        <span><i class="linha" style="background:var(--accent)"></i>Saldo</span>
+      </div>
+    </div>
+    ${svg}
+    <div class="dash-foot">
+      <div><div class="lbl">Receitas 12m</div><div class="val" style="color:var(--good)">${fmtBRL(tot12r)}</div></div>
+      <div><div class="lbl">Despesas 12m</div><div class="val" style="color:var(--danger)">${fmtBRL(tot12d)}</div></div>
+      <div><div class="lbl">Acum. até ${mesLabel(mkSel)}</div><div class="val" style="color:var(--accent)">${fmtBRL(acumulado)}</div></div>
+    </div>
+    <div class="dash-hint">Toque em um mês do gráfico para ver o detalhe dele</div>`;
+}
+
+function desenharListaLancamentos(mk){
+  const lista = document.getElementById("contasLista");
+  const itens = contasItens
+    .filter(it => it.mes === mk)
+    .sort((a,b) => (b.criadoEm?.toMillis?.() || 0) - (a.criadoEm?.toMillis?.() || 0));
+  if(itens.length === 0){ lista.innerHTML = `<div class="empty-state">Nenhum lançamento neste mês.</div>`; return; }
+
+  const admin = !!currentUser?.isAdmin;
+  const opcoesMes = ultimos12Meses();
+  lista.innerHTML = itens.map(it=>{
+    const rec = it.tipo === "receita";
+    const editado = it.editadoPor
+      ? ` · editado por ${esc(it.editadoPor)}${it.editadoEm?.toDate ? " em " + it.editadoEm.toDate().toLocaleDateString("pt-BR") : ""}`
+      : "";
+    const meses = opcoesMes.includes(it.mes) ? opcoesMes : [it.mes, ...opcoesMes];
+    const adminHtml = !admin ? "" : `
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="btn btn-ghost btn-sm" style="flex:1;" data-fin-act="editar" data-id="${esc(it.id)}">Editar</button>
+        <button class="btn btn-danger btn-sm" style="flex:1;" data-fin-act="excluir" data-id="${esc(it.id)}">Excluir</button>
+      </div>
+      <div class="edit-panel ${contasEditandoId===it.id ? "" : "hidden"}" id="fin-edit-${esc(it.id)}">
+        <div class="form-row"><label>Tipo</label>
+          <select id="fin-tipo-${esc(it.id)}">
+            <option value="receita" ${rec?"selected":""}>Receita</option>
+            <option value="despesa" ${!rec?"selected":""}>Despesa</option>
+          </select>
+        </div>
+        <div class="form-row"><label>Valor (R$)</label><input type="number" id="fin-valor-${esc(it.id)}" step="0.01" min="0" value="${Number(it.valor)||0}"></div>
+        <div class="form-row"><label>Descrição</label><input type="text" id="fin-desc-${esc(it.id)}" maxlength="80" value="${esc(it.descricao||"")}"></div>
+        <div class="form-row"><label>Mês de referência</label>
+          <select id="fin-mes-${esc(it.id)}">
+            ${meses.map(m=>`<option value="${m}" ${m===it.mes?"selected":""}>${mesLabel(m)}</option>`).join("")}
+          </select>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-ghost btn-sm" style="flex:1;" data-fin-act="cancelar" data-id="${esc(it.id)}">Cancelar</button>
+          <button class="btn btn-primary btn-sm" style="flex:1;" data-fin-act="salvar" data-id="${esc(it.id)}">Salvar alterações</button>
+        </div>
+      </div>`;
+    return `<div class="list-card">
+      <div class="row1">
+        <div style="min-width:0;"><div class="title">${esc(it.descricao)}</div><div class="meta">${rec?"Receita":"Despesa"}${editado}</div></div>
+        <div class="fin-valor ${rec?"rec":"desp"}">${rec?"+":"-"}${fmtBRL(Number(it.valor)||0)}</div>
+      </div>
+      ${adminHtml}
+    </div>`;
+  }).join("");
+
+  if(!admin) return;
+  lista.querySelectorAll("button[data-fin-act]").forEach(btn=>{
+    btn.onclick = async () => {
+      const id = btn.dataset.id;
+      const it = contasItens.find(x => x.id === id);
+      if(!it) return;
+      const act = btn.dataset.finAct;
+
+      if(act === "editar"){
+        contasEditandoId = contasEditandoId === id ? null : id;
+        document.getElementById(`fin-edit-${id}`).classList.toggle("hidden", contasEditandoId !== id);
+        return;
+      }
+      if(act === "cancelar"){
+        contasEditandoId = null;
+        desenharListaLancamentos(mk);
+        return;
+      }
+      if(act === "excluir"){
+        if(!confirm(`Excluir o lançamento "${it.descricao}" (${fmtBRL(Number(it.valor)||0)})?\n\nEssa ação não pode ser desfeita.`)) return;
+        btn.disabled = true;
+        try{
+          await deleteDoc(doc(db,"financas",id));
+          if(contasEditandoId === id) contasEditandoId = null;
+          showToast("Lançamento excluído.");
+          renderContasTab();
+        }catch(e){
+          console.error(e);
+          btn.disabled = false;
+          showToast("Erro ao excluir. Tente novamente.");
+        }
+        return;
+      }
+      if(act === "salvar"){
+        const tipo = document.getElementById(`fin-tipo-${id}`).value;
+        const valor = Math.round(parseFloat(document.getElementById(`fin-valor-${id}`).value) * 100) / 100;
+        const descricao = document.getElementById(`fin-desc-${id}`).value.trim();
+        const mes = document.getElementById(`fin-mes-${id}`).value;
+        if(!valor || valor <= 0 || !descricao){ showToast("Preencha valor e descrição."); return; }
+        btn.disabled = true;
+        try{
+          await updateDoc(doc(db,"financas",id), {
+            tipo, valor, descricao, mes,
+            editadoPor: `${currentUser.posto} ${currentUser.nome}`,
+            editadoEm: serverTimestamp()
+          });
+          contasEditandoId = null;
+          showToast(mes !== it.mes ? `Lançamento atualizado e movido para ${mesLabel(mes)}.` : "Lançamento atualizado.");
+          renderContasTab();
+        }catch(e){
+          console.error(e);
+          btn.disabled = false;
+          showToast("Erro ao salvar. Tente novamente.");
+        }
+      }
+    };
+  });
 }
 
 document.getElementById("btnFinAdd").onclick = async () => {
   if(!currentUser.isAdmin) return;
   const tipo = document.getElementById("finTipo").value;
-  const valor = parseFloat(document.getElementById("finValor").value);
+  const valor = Math.round(parseFloat(document.getElementById("finValor").value) * 100) / 100;
   const descricao = document.getElementById("finDescricao").value.trim();
   if(!valor || valor<=0 || !descricao){ showToast("Preencha valor e descrição."); return; }
   const mk = document.getElementById("contasMonthSelect").value || mesKey(new Date());
-  await addDoc(collection(db,"financas"), { tipo, valor, descricao, mes: mk, criadoEm: serverTimestamp() });
-  document.getElementById("finValor").value = "";
-  document.getElementById("finDescricao").value = "";
-  showToast("Lançamento registrado.");
-  renderContasTab();
+  const btn = document.getElementById("btnFinAdd");
+  btn.disabled = true;
+  try{
+    await addDoc(collection(db,"financas"), { tipo, valor, descricao, mes: mk, criadoEm: serverTimestamp() });
+    document.getElementById("finValor").value = "";
+    document.getElementById("finDescricao").value = "";
+    showToast("Lançamento registrado.");
+    renderContasTab();
+  }catch(e){
+    console.error(e);
+    showToast("Erro ao registrar o lançamento.");
+  }finally{
+    btn.disabled = false;
+  }
 };
 
 /* =======================================================================
@@ -1902,32 +2177,107 @@ document.getElementById("btnAddUser").onclick = async () => {
   }
 };
 
+/* Controle de pagamentos: filtros por situação e posto, ordenação
+   alfabética ou por antiguidade (hierarquia de postos; dentro do mesmo
+   posto, ordem alfabética). */
+const POSTOS_HIERARQUIA = ["Cel","Ten Cel","Maj","Cap","1º Ten","2º Ten","Asp","S Ten","1º Sgt","2º Sgt","3º Sgt","Cb","S1","S2"];
+function rankPosto(p){ const i = POSTOS_HIERARQUIA.indexOf(p); return i < 0 ? 999 : i; }
+function cmpNome(a, b){ return String(a.nome||"").localeCompare(String(b.nome||""), "pt-BR", { sensitivity:"base" }); }
+
+let pagState = { mk:null, usuarios:[], pagos:{} };
+let pagFiltroStatus = "todos";
+let pagRenderSeq = 0;
+
+document.querySelectorAll("#pagFiltroStatus .seg-opt").forEach(opt=>{
+  opt.onclick = () => {
+    pagFiltroStatus = opt.dataset.v;
+    document.querySelectorAll("#pagFiltroStatus .seg-opt").forEach(o => o.classList.toggle("active", o === opt));
+    desenharPagamentos();
+  };
+});
+document.getElementById("pagFiltroPosto").addEventListener("change", desenharPagamentos);
+document.getElementById("pagOrdem").addEventListener("change", desenharPagamentos);
+
 async function renderPagamentosList(){
+  const seq = ++pagRenderSeq;
   const mk = document.getElementById("pagMonthSelect").value || mesKey(new Date());
   document.getElementById("pagMonthSelect").value = mk;
   const list = document.getElementById("pagamentosList");
-  list.innerHTML = `<div class="empty-state">Carregando...</div>`;
-  const usnap = await getDocs(query(collection(db,"usuarios"), where("status","==","aprovado")));
-  const pagSnap = await getDocs(query(collection(db,"pagamentos"), where("mes","==",mk)));
-  const pagosMap = {};
-  pagSnap.forEach(d=>{ pagosMap[d.data().saram] = d.data().pago; });
+  if(pagState.mk !== mk) list.innerHTML = `<div class="empty-state">Carregando...</div>`;
+  try{
+    const usnap = await getDocs(query(collection(db,"usuarios"), where("status","==","aprovado")));
+    const pagSnap = await getDocs(query(collection(db,"pagamentos"), where("mes","==",mk)));
+    if(seq !== pagRenderSeq) return;
+    const usuarios = [];
+    usnap.forEach(d => usuarios.push(d.data()));
+    const pagos = {};
+    pagSnap.forEach(d => { pagos[d.data().saram] = !!d.data().pago; });
+    pagState = { mk, usuarios, pagos };
+  }catch(e){
+    console.error(e);
+    if(seq === pagRenderSeq) list.innerHTML = `<div class="empty-state">Erro ao carregar pagamentos.</div>`;
+    return;
+  }
+  atualizarOpcoesPosto();
+  desenharPagamentos();
+}
 
-  let html = "";
-  usnap.forEach(d=>{
-    const u = d.data();
-    const pago = !!pagosMap[u.saram];
-    html += `<div class="list-card row1" style="display:flex;justify-content:space-between;align-items:center;">
-      <div><div class="title">${u.posto} ${u.nome}</div><div class="meta">SARAM ${u.saram}</div></div>
-      <button class="btn btn-sm ${pago?"btn-good":"btn-danger"}" data-saram="${u.saram}" data-pago="${pago}">${pago?"Pago":"Pendente"}</button>
+function atualizarOpcoesPosto(){
+  const sel = document.getElementById("pagFiltroPosto");
+  const atual = sel.value;
+  const presentes = [...new Set(pagState.usuarios.map(u => u.posto).filter(Boolean))]
+    .sort((a,b) => rankPosto(a) - rankPosto(b) || a.localeCompare(b, "pt-BR"));
+  sel.innerHTML = `<option value="">Todos</option>` + presentes.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join("");
+  sel.value = presentes.includes(atual) ? atual : "";
+}
+
+function desenharPagamentos(){
+  const { mk, usuarios, pagos } = pagState;
+  if(!mk) return;
+  const list = document.getElementById("pagamentosList");
+  const posto = document.getElementById("pagFiltroPosto").value;
+  const ordem = document.getElementById("pagOrdem").value;
+
+  const doPosto = posto ? usuarios.filter(u => u.posto === posto) : usuarios;
+  const nPagos = doPosto.filter(u => pagos[u.saram]).length;
+  const contagem = { todos: doPosto.length, pago: nPagos, nao: doPosto.length - nPagos };
+  document.querySelectorAll("#pagFiltroStatus .seg-opt").forEach(o => { o.querySelector(".n").textContent = contagem[o.dataset.v]; });
+
+  let lista = doPosto;
+  if(pagFiltroStatus === "pago") lista = lista.filter(u => pagos[u.saram]);
+  if(pagFiltroStatus === "nao") lista = lista.filter(u => !pagos[u.saram]);
+  lista = [...lista].sort(ordem === "antiguidade"
+    ? (a,b) => rankPosto(a.posto) - rankPosto(b.posto) || cmpNome(a,b)
+    : (a,b) => cmpNome(a,b) || rankPosto(a.posto) - rankPosto(b.posto));
+
+  document.getElementById("pagResumo").textContent =
+    `${nPagos} de ${doPosto.length} pagos em ${mesLabel(mk)}` + (posto ? ` · ${posto}` : "");
+
+  if(lista.length === 0){
+    list.innerHTML = `<div class="empty-state">${usuarios.length ? "Nenhum militar neste filtro." : "Nenhum usuário aprovado."}</div>`;
+    return;
+  }
+  list.innerHTML = lista.map(u => {
+    const pago = !!pagos[u.saram];
+    return `<div class="list-card row1" style="display:flex;justify-content:space-between;align-items:center;">
+      <div style="min-width:0;"><div class="title">${esc(u.posto)} ${esc(u.nome)}</div><div class="meta">SARAM ${esc(u.saram)}</div></div>
+      <button class="btn btn-sm ${pago?"btn-good":"btn-danger"}" data-saram="${esc(u.saram)}">${pago?"Pago":"Não pago"}</button>
     </div>`;
-  });
-  list.innerHTML = html || `<div class="empty-state">Nenhum usuário aprovado.</div>`;
+  }).join("");
+
   list.querySelectorAll("button[data-saram]").forEach(btn=>{
     btn.onclick = async () => {
       const saram = btn.dataset.saram;
-      const novoPago = btn.dataset.pago !== "true";
-      await setDoc(doc(db,"pagamentos", `${saram}_${mk}`), { saram, mes: mk, pago: novoPago, atualizadoEm: serverTimestamp() });
-      renderPagamentosList();
+      const novoPago = !pagState.pagos[saram];
+      btn.disabled = true;
+      try{
+        await setDoc(doc(db,"pagamentos", `${saram}_${mk}`), { saram, mes: mk, pago: novoPago, atualizadoEm: serverTimestamp() });
+        if(pagState.mk === mk){ pagState.pagos[saram] = novoPago; desenharPagamentos(); }
+      }catch(e){
+        console.error(e);
+        btn.disabled = false;
+        showToast("Erro ao atualizar o pagamento.");
+      }
     };
   });
 }
