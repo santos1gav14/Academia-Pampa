@@ -493,6 +493,18 @@ select:focus, input:focus, textarea:focus{outline:2px solid var(--accent);outlin
           </div>
         </div>
         <div class="section-title">Todos os usuários</div>
+        <div class="pag-toolbar">
+          <div class="seg" id="usrFiltroTipo">
+            <div class="seg-opt active" data-v="todos">Todos<span class="n"></span></div>
+            <div class="seg-opt" data-v="admin">ADM<span class="n"></span></div>
+            <div class="seg-opt" data-v="piloto">Pilotos<span class="n"></span></div>
+          </div>
+          <div class="pag-selects">
+            <div><label>Posto</label><select id="usrFiltroPosto"><option value="">Todos</option></select></div>
+            <div><label>Ordenar</label><select id="usrOrdem"><option value="alfabetica">Alfabética</option><option value="antiguidade">Antiguidade</option></select></div>
+          </div>
+          <div class="pag-resumo" id="usrResumo"></div>
+        </div>
         <div class="card-list" id="usuariosList"></div>
       </div>
 
@@ -684,7 +696,7 @@ const RESET_SENHA_API_URL = "https://academia-pampa.vercel.app/api/reset-passwor
    cache, compara a versao e, se houver uma mais nova, recarrega sozinho.
    Ninguem precisa limpar cache, abrir aba anonima nem usar link diferente.
    ======================================================================= */
-const APP_VERSION = "4";
+const APP_VERSION = "5";
 
 async function checarAtualizacao(){
   try{
@@ -2045,13 +2057,73 @@ async function renderPendentesList(){
   });
 }
 
+/* Todos os usuários: filtros (todos / ADM / pilotos, posto) e ordenação
+   alfabética ou por antiguidade — mesma lógica da aba Pagamentos. */
+let usrState = { carregado:false, usuarios:[] };
+let usrFiltroTipo = "todos";
+let usrRenderSeq = 0;
+
+document.querySelectorAll("#usrFiltroTipo .seg-opt").forEach(opt=>{
+  opt.onclick = () => {
+    usrFiltroTipo = opt.dataset.v;
+    document.querySelectorAll("#usrFiltroTipo .seg-opt").forEach(o => o.classList.toggle("active", o === opt));
+    desenharUsuarios();
+  };
+});
+document.getElementById("usrFiltroPosto").addEventListener("change", desenharUsuarios);
+document.getElementById("usrOrdem").addEventListener("change", desenharUsuarios);
+
 async function renderUsuariosList(){
+  const seq = ++usrRenderSeq;
   const list = document.getElementById("usuariosList");
-  list.innerHTML = `<div class="empty-state">Carregando...</div>`;
-  const snap = await getDocs(collection(db,"usuarios"));
+  if(!usrState.carregado) list.innerHTML = `<div class="empty-state">Carregando...</div>`;
+  try{
+    const snap = await getDocs(collection(db,"usuarios"));
+    if(seq !== usrRenderSeq) return;
+    const usuarios = [];
+    snap.forEach(d => usuarios.push(d.data()));
+    usrState = { carregado:true, usuarios };
+  }catch(e){
+    console.error(e);
+    if(seq === usrRenderSeq) list.innerHTML = `<div class="empty-state">Erro ao carregar usuários.</div>`;
+    return;
+  }
+  preencherOpcoesPosto("usrFiltroPosto", usrState.usuarios);
+  desenharUsuarios();
+}
+
+function desenharUsuarios(){
+  if(!usrState.carregado) return;
+  const { usuarios } = usrState;
+  const list = document.getElementById("usuariosList");
+  const posto = document.getElementById("usrFiltroPosto").value;
+  const ordem = document.getElementById("usrOrdem").value;
+
+  const doPosto = posto ? usuarios.filter(u => u.posto === posto) : usuarios;
+  const contagem = {
+    todos: doPosto.length,
+    admin: doPosto.filter(u => u.isAdmin).length,
+    piloto: doPosto.filter(u => u.isPiloto).length
+  };
+  document.querySelectorAll("#usrFiltroTipo .seg-opt").forEach(o => { o.querySelector(".n").textContent = contagem[o.dataset.v]; });
+
+  let lista = doPosto;
+  if(usrFiltroTipo === "admin") lista = lista.filter(u => u.isAdmin);
+  if(usrFiltroTipo === "piloto") lista = lista.filter(u => u.isPiloto);
+  lista = [...lista].sort(ordem === "antiguidade"
+    ? (a,b) => rankPosto(a.posto) - rankPosto(b.posto) || cmpNome(a,b)
+    : (a,b) => cmpNome(a,b) || rankPosto(a.posto) - rankPosto(b.posto));
+
+  document.getElementById("usrResumo").textContent =
+    `Mostrando ${lista.length} de ${usuarios.length} usuários` + (posto ? ` · ${posto}` : "");
+
+  if(lista.length === 0){
+    list.innerHTML = `<div class="empty-state">${usuarios.length ? "Nenhum usuário neste filtro." : "Nenhum usuário."}</div>`;
+    return;
+  }
+
   let html = "";
-  snap.forEach(d=>{
-    const u = d.data();
+  lista.forEach(u=>{
     const tagClass = u.status==="aprovado" ? "tag-aprovado" : u.status==="bloqueado" ? "tag-bloqueado" : "tag-pendente";
     html += `<div class="list-card">
       <div class="row1">
@@ -2092,10 +2164,9 @@ async function renderUsuariosList(){
       </div>
     </div>`;
   });
-  list.innerHTML = html || `<div class="empty-state">Nenhum usuário.</div>`;
+  list.innerHTML = html;
 
-  snap.forEach(d=>{
-    const u = d.data();
+  lista.forEach(u=>{
     const sel = document.getElementById(`edit-posto-${u.saram}`);
     if(sel) sel.value = u.posto;
   });
@@ -2218,14 +2289,14 @@ async function renderPagamentosList(){
     if(seq === pagRenderSeq) list.innerHTML = `<div class="empty-state">Erro ao carregar pagamentos.</div>`;
     return;
   }
-  atualizarOpcoesPosto();
+  preencherOpcoesPosto("pagFiltroPosto", pagState.usuarios);
   desenharPagamentos();
 }
 
-function atualizarOpcoesPosto(){
-  const sel = document.getElementById("pagFiltroPosto");
+function preencherOpcoesPosto(selectId, usuarios){
+  const sel = document.getElementById(selectId);
   const atual = sel.value;
-  const presentes = [...new Set(pagState.usuarios.map(u => u.posto).filter(Boolean))]
+  const presentes = [...new Set(usuarios.map(u => u.posto).filter(Boolean))]
     .sort((a,b) => rankPosto(a) - rankPosto(b) || a.localeCompare(b, "pt-BR"));
   sel.innerHTML = `<option value="">Todos</option>` + presentes.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join("");
   sel.value = presentes.includes(atual) ? atual : "";
